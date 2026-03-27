@@ -1,6 +1,6 @@
 <?php
 /**
- * 首页 - Bot 列表展示
+ * 首页 - Bot 展示
  */
 require_once __DIR__ . '/includes/functions.php';
 $pdo = getDB();
