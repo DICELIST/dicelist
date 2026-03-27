@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 - 页面不存在 | 骰娘导航</title>
+  <style>
+    :root {
+      --blue-primary: #0a84ff;
+      --blue-dark:    #0060cc;
+      --blue-light:   #e8f3ff;
+      --blue-glow:    rgba(10, 132, 255, 0.25);
+      --gold:         #f5a623;
+      --gray-900:     #111318;
+      --gray-800:     #1a1d24;
+      --gray-600:     #3a3e4a;
+      --gray-400:     #8a8fa0;
+      --gray-300:     #b0b5c4;
+      --text-main:    #1a1d24;
+      --text-sub:     #5a5f70;
+      --border:       #d8dce8;
+      --white:        #ffffff;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f7fc;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 科技感背景网格 */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(10,132,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(10,132,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* 光晕 */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background:
+        radial-gradient(ellipse 60% 40% at 20% 20%, rgba(10,132,255,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 80% 80%, rgba(245,166,35,0.05) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 40px 24px;
+      max-width: 560px;
+      width: 100%;
+    }
+
+    /* 大号 404 数字 */
+    .error-code {
+      font-size: clamp(5rem, 20vw, 9rem);
+      font-weight: 900;
+      letter-spacing: -4px;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--blue-primary) 0%, var(--blue-dark) 50%, var(--gold) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      user-select: none;
+      margin-bottom: 8px;
+      /* 数字发光动画 */
+      filter: drop-shadow(0 0 32px rgba(10,132,255,0.25));
+      animation: glow 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes glow {
+      from { filter: drop-shadow(0 0 20px rgba(10,132,255,0.2)); }
+      to   { filter: drop-shadow(0 0 40px rgba(10,132,255,0.4)); }
+    }
+
+    /* 小图标 */
+    .error-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      background: var(--blue-light);
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      border: 2px solid rgba(10,132,255,0.15);
+    }
+
+    .error-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 10px;
+    }
+
+    .error-desc {
+      font-size: 0.95rem;
+      color: var(--text-sub);
+      line-height: 1.7;
+      margin-bottom: 32px;
+    }
+
+    /* 按钮组 */
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+      outline: none;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--blue-primary), var(--blue-dark));
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(10,132,255,0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(10,132,255,0.4);
+    }
+
+    .btn-outline {
+      background: #fff;
+      color: var(--blue-primary);
+      border: 1.5px solid var(--border);
+      box-shadow: 0 2px 8px rgba(10,132,255,0.06);
+    }
+    .btn-outline:hover {
+      border-color: var(--blue-primary);
+      background: var(--blue-light);
+      transform: translateY(-2px);
+    }
+
+    /* 装饰线 */
+    .divider {
+      width: 48px;
+      height: 3px;
+      background: linear-gradient(90deg, var(--blue-primary), var(--gold));
+      border-radius: 2px;
+      margin: 0 auto 24px;
+    }
+
+    /* 漂浮骰子装饰 */
+    .deco {
+      position: fixed;
+      opacity: 0.06;
+      pointer-events: none;
+      font-size: 5rem;
+      user-select: none;
+      z-index: 0;
+    }
+    .deco-1 { top: 8%;  left: 5%;  animation: float 7s ease-in-out infinite; }
+    .deco-2 { top: 15%; right: 8%; animation: float 9s ease-in-out infinite 1s; font-size: 3.5rem; }
+    .deco-3 { bottom: 12%; left: 10%; animation: float 8s ease-in-out infinite 2s; font-size: 3rem; }
+    .deco-4 { bottom: 18%; right: 6%; animation: float 6s ease-in-out infinite 0.5s; font-size: 4rem; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50%       { transform: translateY(-18px) rotate(8deg); }
+    }
+
+    /* 响应式 */
+    @media (max-width: 480px) {
+      .error-title { font-size: 1.25rem; }
+      .btn { padding: 9px 18px; font-size: 0.88rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 装饰骰子（SVG） -->
+  <div class="deco deco-1">
+    <svg viewBox="0 0 60 60" width="80" fill="none" stroke="#0a84ff" stroke-width="3">
+      <rect x="5" y="5" width="50" height="50" rx="10"/>
+      <circle cx="20" cy="20" r="4" fill="#0a84ff"/>
+      <circle cx="40" cy="40" r="4" fill="#0a84ff"/>
+      <circle cx="40" cy="20" r="4" fill="#0a84ff"/>
+      <circle cx="20" cy="40" r="4" fill="#0a84ff"/>
+    </svg>
+  </div>
+  <div class="deco deco-2">
+    <svg viewBox="0 0 60 60" width="60" fill="none" stroke="#f5a623" stroke-width="3">
+      <rect x="5" y="5" width="50" height="50" rx="10"/>
+      <circle cx="30" cy="30" r="4" fill="#f5a623"/>
+      <circle cx="18" cy="18" r="4" fill="#f5a623"/>
+      <circle cx="42" cy="42" r="4" fill="#f5a623"/>
+    </svg>
+  </div>
+  <div class="deco deco-3">
+    <svg viewBox="0 0 60 60" width="55" fill="none" stroke="#0a84ff" stroke-width="3">
+      <rect x="5" y="5" width="50" height="50" rx="10"/>
+      <circle cx="30" cy="30" r="4" fill="#0a84ff"/>
+    </svg>
+  </div>
+  <div class="deco deco-4">
+    <svg viewBox="0 0 60 60" width="65" fill="none" stroke="#f5a623" stroke-width="3">
+      <rect x="5" y="5" width="50" height="50" rx="10"/>
+      <circle cx="18" cy="18" r="4" fill="#f5a623"/>
+      <circle cx="42" cy="18" r="4" fill="#f5a623"/>
+      <circle cx="18" cy="42" r="4" fill="#f5a623"/>
+      <circle cx="42" cy="42" r="4" fill="#f5a623"/>
+      <circle cx="18" cy="30" r="4" fill="#f5a623"/>
+      <circle cx="42" cy="30" r="4" fill="#f5a623"/>
+    </svg>
+  </div>
+
+  <div class="wrapper">
+
+    <!-- 顶部小图标 -->
+    <div class="error-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <line x1="11" y1="8" x2="11" y2="11"/>
+        <line x1="11" y1="14" x2="11.01" y2="14"/>
+      </svg>
+    </div>
+
+    <!-- 404 大字 -->
+    <div class="error-code">404</div>
+
+    <div class="divider"></div>
+
+    <h1 class="error-title">页面走丢了</h1>
+    <p class="error-desc">
+      你访问的页面可能已被删除、移动或从未存在过。<br>
+      别担心，骰子还在，回到首页继续探索吧。
+    </p>
+
+    <div class="btn-group">
+      <a href="/" class="btn btn-primary">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        返回首页
+      </a>
+      <a href="javascript:history.back()" class="btn btn-outline">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        返回上一页
+      </a>
+    </div>
+
+  </div>
+
+</body>
+</html>
