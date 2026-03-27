@@ -4,9 +4,9 @@
  */
 
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'dicelist');
-define('DB_USER', 'dicelist');
-define('DB_PASS', 'RbMAn9YZeNBd9R89');
+define('DB_NAME', '');
+define('DB_USER', '');
+define('DB_PASS', '');
 define('DB_CHARSET', 'utf8mb4');
 
 // 网站根URL（部署时根据实际域名修改）
