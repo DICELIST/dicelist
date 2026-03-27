@@ -109,7 +109,31 @@ require_once __DIR__ . '/includes/header.php';
       </div>
       <div class="detail-field">
         <div class="detail-field-label">ID / URL</div>
-        <div class="detail-field-value" style="word-break:break-all;"><?= $bot['id_url'] ? e($bot['id_url']) : '-' ?></div>
+        <div class="detail-field-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <?php
+          $idUrl = $bot['id_url'] ?? '';
+          if ($idUrl === '') {
+              echo '<span class="text-gray">-</span>';
+          } elseif (preg_match('/^\d{1,11}$/', $idUrl)) {
+              // 纯数字 ≤11位：显示数字 + 复制按钮
+              echo '<span id="idUrlText">' . e($idUrl) . '</span>';
+              echo '<button type="button" class="btn btn-outline btn-sm" onclick="copyIdUrl()" title="复制" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;">';
+              echo '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+              echo '复制</button>';
+          } elseif (preg_match('/^https?:\/\//i', $idUrl)) {
+              // URL：<a> 标签（支持右键新标签），由 JS 拦截 click 弹出确认框
+              echo '<a href="' . e($idUrl) . '" target="_blank" rel="noopener noreferrer"'
+                 . ' class="btn btn-primary btn-sm leave-link"'
+                 . ' data-url="' . e($idUrl) . '"'
+                 . ' style="display:inline-flex;align-items:center;gap:5px;">';
+              echo '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+              echo '点击跳转</a>';
+          } else {
+              // 其他文本直接展示
+              echo '<span style="word-break:break-all;">' . e($idUrl) . '</span>';
+          }
+          ?>
+        </div>
       </div>
       <div class="detail-field">
         <div class="detail-field-label">运行框架</div>
@@ -180,5 +204,121 @@ require_once __DIR__ . '/includes/header.php';
     </a>
   </div>
 </div>
+
+<!-- 复制 & 离站弹窗 -->
+<script>
+/* ---- 复制 ID ---- */
+function copyIdUrl() {
+    var el = document.getElementById('idUrlText');
+    if (!el) return;
+    var text = el.textContent.trim();
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(showCopyTip);
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand('copy'); showCopyTip(); } catch(e) {}
+        document.body.removeChild(ta);
+    }
+}
+function showCopyTip() {
+    var tip = document.createElement('div');
+    tip.textContent = '✓ 已复制到剪贴板';
+    tip.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(0);'
+        + 'background:var(--gray-900,#1a1d24);color:#fff;padding:10px 22px;border-radius:24px;'
+        + 'font-size:0.88rem;z-index:9999;pointer-events:none;'
+        + 'box-shadow:0 4px 20px rgba(0,0,0,0.25);transition:opacity 0.4s;';
+    document.body.appendChild(tip);
+    setTimeout(function() {
+        tip.style.opacity = '0';
+        setTimeout(function() { if (tip.parentNode) tip.parentNode.removeChild(tip); }, 400);
+    }, 1800);
+}
+
+/* ---- 离站确认弹窗 ---- */
+function leaveConfirm(url) {
+    // 关闭已有弹窗
+    var old = document.querySelector('.leave-modal');
+    if (old) old.parentNode.removeChild(old);
+
+    var overlay = document.createElement('div');
+    overlay.className = 'leave-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;'
+        + 'display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;max-width:420px;width:100%;'
+        + 'padding:32px;box-shadow:0 20px 60px rgba(0,0,0,0.3);';
+
+    // 警告图标
+    var iconWrap = document.createElement('div');
+    iconWrap.style.cssText = 'width:48px;height:48px;background:#fff8e8;border-radius:50%;'
+        + 'display:flex;align-items:center;justify-content:center;margin:0 auto 16px;';
+    iconWrap.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="2">'
+        + '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>'
+        + '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+
+    var title = document.createElement('h3');
+    title.textContent = '即将离开本站';
+    title.style.cssText = 'text-align:center;font-size:1.1rem;font-weight:700;margin-bottom:10px;color:#1a1d24;';
+
+    var desc = document.createElement('p');
+    desc.style.cssText = 'text-align:center;font-size:0.88rem;color:#5a5f70;margin-bottom:20px;line-height:1.6;';
+    desc.innerHTML = '你即将跳转至外部链接，本站不对第三方内容负责，<br>请注意甄别信息安全，谨防诈骗。';
+
+    var urlBox = document.createElement('div');
+    urlBox.textContent = url;
+    urlBox.style.cssText = 'background:#f5f7fc;border-radius:8px;padding:10px 14px;word-break:break-all;'
+        + 'font-size:0.78rem;color:#8a8fa0;margin-bottom:20px;';
+
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:12px;';
+
+    var btnCancel = document.createElement('button');
+    btnCancel.textContent = '取消';
+    btnCancel.style.cssText = 'flex:1;padding:10px;border:1.5px solid #d8dce8;border-radius:8px;'
+        + 'background:#fff;cursor:pointer;font-size:0.9rem;color:#5a5f70;';
+    btnCancel.addEventListener('click', function() { overlay.parentNode.removeChild(overlay); });
+
+    var btnGo = document.createElement('button');
+    btnGo.textContent = '确认跳转';
+    btnGo.style.cssText = 'flex:1;padding:10px;border:none;border-radius:8px;'
+        + 'background:linear-gradient(135deg,#0a84ff,#0060cc);cursor:pointer;'
+        + 'font-size:0.9rem;color:#fff;font-weight:600;';
+    btnGo.addEventListener('click', function() {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        overlay.parentNode.removeChild(overlay);
+    });
+
+    btnRow.appendChild(btnCancel);
+    btnRow.appendChild(btnGo);
+    box.appendChild(iconWrap);
+    box.appendChild(title);
+    box.appendChild(desc);
+    box.appendChild(urlBox);
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+
+    // 点击蒙层关闭
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) overlay.parentNode.removeChild(overlay);
+    });
+    document.body.appendChild(overlay);
+}
+
+/* ---- 拦截 .leave-link 的左键单击（右键不拦截，保留系统菜单） ---- */
+document.addEventListener('click', function(e) {
+    var link = e.target.closest('.leave-link');
+    if (!link) return;
+    // Ctrl/Cmd/Shift 按下时直接走浏览器原生行为（在新标签页打开）
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    leaveConfirm(link.dataset.url);
+});
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

@@ -1,6 +1,6 @@
 <?php
 /**
- * 首页 - Bot 展示
+ * 首页 - Bot 列表展示
  */
 require_once __DIR__ . '/includes/functions.php';
 $pdo = getDB();
@@ -122,40 +122,42 @@ require_once __DIR__ . '/includes/header.php';
         <input type="text" id="searchKeyword" name="q" placeholder="搜索Bot昵称、骰主、ID..." value="<?= e($keyword) ?>">
       </div>
 
-      <select name="platform" class="filter-select" onchange="this.form.submit()">
-        <option value="">全部平台</option>
-        <?php foreach ($optPlatform as $opt): ?>
-        <option value="<?= e($opt['value']) ?>" <?= $fPlatform === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
-        <?php endforeach; ?>
-      </select>
+      <div class="filter-selects-row">
+        <select name="platform" class="filter-select" onchange="this.form.submit()">
+          <option value="">全部平台</option>
+          <?php foreach ($optPlatform as $opt): ?>
+          <option value="<?= e($opt['value']) ?>" <?= $fPlatform === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
+          <?php endforeach; ?>
+        </select>
 
-      <select name="framework" class="filter-select" onchange="this.form.submit()">
-        <option value="">全部框架</option>
-        <?php foreach ($optFramework as $opt): ?>
-        <option value="<?= e($opt['value']) ?>" <?= $fFramework === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
-        <?php endforeach; ?>
-      </select>
+        <select name="framework" class="filter-select" onchange="this.form.submit()">
+          <option value="">全部框架</option>
+          <?php foreach ($optFramework as $opt): ?>
+          <option value="<?= e($opt['value']) ?>" <?= $fFramework === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
+          <?php endforeach; ?>
+        </select>
 
-      <select name="mode" class="filter-select" onchange="this.form.submit()">
-        <option value="">全部模式</option>
-        <?php foreach ($optMode as $opt): ?>
-        <option value="<?= e($opt['value']) ?>" <?= $fMode === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
-        <?php endforeach; ?>
-      </select>
+        <select name="mode" class="filter-select" onchange="this.form.submit()">
+          <option value="">全部模式</option>
+          <?php foreach ($optMode as $opt): ?>
+          <option value="<?= e($opt['value']) ?>" <?= $fMode === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
+          <?php endforeach; ?>
+        </select>
 
-      <select name="blacklist" class="filter-select" onchange="this.form.submit()">
-        <option value="">黑名单</option>
-        <?php foreach ($optBlacklist as $opt): ?>
-        <option value="<?= e($opt['value']) ?>" <?= $fBlacklist === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
-        <?php endforeach; ?>
-      </select>
+        <select name="blacklist" class="filter-select" onchange="this.form.submit()">
+          <option value="">黑名单</option>
+          <?php foreach ($optBlacklist as $opt): ?>
+          <option value="<?= e($opt['value']) ?>" <?= $fBlacklist === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
+          <?php endforeach; ?>
+        </select>
 
-      <select name="status" class="filter-select" onchange="this.form.submit()">
-        <option value="">全部状态</option>
-        <?php foreach ($optStatus as $opt): ?>
-        <option value="<?= e($opt['value']) ?>" <?= $fStatus === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
-        <?php endforeach; ?>
-      </select>
+        <select name="status" class="filter-select" onchange="this.form.submit()">
+          <option value="">全部状态</option>
+          <?php foreach ($optStatus as $opt): ?>
+          <option value="<?= e($opt['value']) ?>" <?= $fStatus === $opt['value'] ? 'selected' : '' ?>><?= e($opt['value']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
 
       <button type="submit" class="btn btn-primary btn-sm">搜索</button>
     </div>

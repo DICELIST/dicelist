@@ -17,7 +17,7 @@ function getCurrentUser(): ?array {
     initSession();
     if (!empty($_SESSION['user_id'])) {
         $pdo = getDB();
-        $stmt = $pdo->prepare('SELECT id, username, nickname, is_admin, created_at FROM users WHERE id = ?');
+        $stmt = $pdo->prepare('SELECT id, username, nickname, email, email_verified, is_admin, created_at FROM users WHERE id = ?');
         $stmt->execute([$_SESSION['user_id']]);
         return $stmt->fetch() ?: null;
     }
