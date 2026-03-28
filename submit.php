@@ -245,9 +245,7 @@ require_once __DIR__ . '/includes/header.php';
             <button type="button" onclick="document.getElementById('publishAgreementModal').style.display='none'"
                     style="background:none;border:none;cursor:pointer;font-size:1.4rem;line-height:1;color:var(--text-sub);padding:4px;">×</button>
           </div>
-          <div style="overflow-y:auto;padding:20px 24px;font-size:0.88rem;line-height:1.7;color:var(--text-main);">
-            <?= $publishAgreement['content'] ?>
-          </div>
+          <div class="agreement-md-body" id="publishAgreementBody" style="overflow-y:auto;padding:20px 24px;font-size:0.88rem;line-height:1.7;color:var(--text-main);"><!-- 由 JS 渲染 --></div>
           <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:12px;flex-shrink:0;">
             <button type="button" onclick="document.getElementById('publishAgreementModal').style.display='none'"
                     class="btn btn-ghost" style="flex:1;">关闭</button>
@@ -274,6 +272,23 @@ require_once __DIR__ . '/includes/header.php';
 
 <style>
 @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr !important; } }
+/* 协议弹窗 Markdown 渲染样式 */
+.agreement-md-body h1,.agreement-md-body h2,.agreement-md-body h3,
+.agreement-md-body h4,.agreement-md-body h5,.agreement-md-body h6 {
+    font-weight:700;margin:0.9em 0 0.35em;line-height:1.3;
+}
+.agreement-md-body h1{font-size:1.15em;}
+.agreement-md-body h2{font-size:1.05em;}
+.agreement-md-body h3{font-size:1em;}
+.agreement-md-body p{margin:0 0 0.65em;}
+.agreement-md-body ul,.agreement-md-body ol{padding-left:1.5em;margin:0 0 0.65em;}
+.agreement-md-body li{margin-bottom:0.2em;}
+.agreement-md-body strong{font-weight:700;}
+.agreement-md-body em{font-style:italic;}
+.agreement-md-body hr{border:none;border-top:1px solid var(--border);margin:1em 0;}
+.agreement-md-body code{background:rgba(0,0,0,0.06);padding:1px 4px;border-radius:3px;font-family:monospace;}
+.agreement-md-body pre{background:rgba(0,0,0,0.06);padding:10px;border-radius:6px;overflow-x:auto;margin:0 0 0.65em;}
+.agreement-md-body blockquote{border-left:3px solid var(--border);padding-left:12px;color:var(--text-sub);margin:0 0 0.65em;}
 </style>
 
 <script>
@@ -293,7 +308,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function showPublishAgreementModal() {
     var m = document.getElementById('publishAgreementModal');
-    if (m) m.style.display = 'flex';
+    if (!m) return;
+    m.style.display = 'flex';
+    var body = document.getElementById('publishAgreementBody');
+    if (body && !body.dataset.rendered) {
+        var md = <?= json_encode($publishAgreement['content']) ?>;
+        if (typeof marked !== 'undefined') {
+            body.innerHTML = marked.parse(md);
+        } else {
+            body.textContent = md;
+        }
+        body.dataset.rendered = '1';
+    }
 }
 
 function publishAgreeAndClose() {
@@ -349,4 +375,5 @@ window.addEventListener('beforeunload', function(e) {
 });
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

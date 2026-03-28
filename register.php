@@ -207,8 +207,24 @@ $csrfToken = e(getCsrfToken());
 .agreement-modal-body {
     flex:1;overflow-y:auto;padding:20px;
     font-size:0.88rem;line-height:1.8;color:var(--text-main);
-    white-space:pre-wrap;
 }
+/* Markdown 渲染样式 */
+.agreement-modal-body h1,.agreement-modal-body h2,.agreement-modal-body h3,
+.agreement-modal-body h4,.agreement-modal-body h5,.agreement-modal-body h6 {
+    font-weight:700;margin:1em 0 0.4em;line-height:1.3;
+}
+.agreement-modal-body h1{font-size:1.2em;}
+.agreement-modal-body h2{font-size:1.1em;}
+.agreement-modal-body h3{font-size:1em;}
+.agreement-modal-body p{margin:0 0 0.7em;}
+.agreement-modal-body ul,.agreement-modal-body ol{padding-left:1.5em;margin:0 0 0.7em;}
+.agreement-modal-body li{margin-bottom:0.2em;}
+.agreement-modal-body strong{font-weight:700;}
+.agreement-modal-body em{font-style:italic;}
+.agreement-modal-body hr{border:none;border-top:1px solid var(--border);margin:1em 0;}
+.agreement-modal-body code{background:rgba(0,0,0,0.06);padding:1px 4px;border-radius:3px;font-family:monospace;}
+.agreement-modal-body pre{background:rgba(0,0,0,0.06);padding:10px;border-radius:6px;overflow-x:auto;margin:0 0 0.7em;}
+.agreement-modal-body blockquote{border-left:3px solid var(--border);padding-left:12px;color:var(--text-sub);margin:0 0 0.7em;}
 .agreement-modal-foot {
     padding:14px 20px;border-top:1px solid var(--border);
     display:flex;justify-content:flex-end;gap:10px;
@@ -223,7 +239,7 @@ $csrfToken = e(getCsrfToken());
       <h3><?= e($regAgreement['title'] ?: '注册协议') ?></h3>
       <button type="button" onclick="closeAgreementModal()" style="background:none;border:none;cursor:pointer;font-size:1.4rem;color:var(--text-sub);line-height:1;">&times;</button>
     </div>
-    <div class="agreement-modal-body"><?= e($regAgreement['content']) ?></div>
+    <div class="agreement-modal-body" id="agreeModalBody"><!-- 由 JS 渲染 --></div>
     <div class="agreement-modal-foot">
       <button type="button" class="btn btn-ghost btn-sm" onclick="closeAgreementModal()">关闭</button>
       <button type="button" class="btn btn-primary btn-sm" onclick="agreeAndClose()">我已阅读，同意</button>
@@ -231,9 +247,26 @@ $csrfToken = e(getCsrfToken());
   </div>
 </div>
 <script>
+var _regAgreementMd = <?= json_encode($regAgreement['content']) ?>;
+
+function _renderAgreementMd(target, mdText) {
+    if (typeof marked !== 'undefined') {
+        target.innerHTML = marked.parse(mdText);
+    } else {
+        // fallback：plain text
+        target.textContent = mdText;
+    }
+}
+
 function showAgreementModal(type) {
-    document.getElementById('agreeModal').classList.add('open');
+    var modal = document.getElementById('agreeModal');
+    var body  = document.getElementById('agreeModalBody');
+    modal.classList.add('open');
     document.body.style.overflow = 'hidden';
+    if (!body.dataset.rendered) {
+        _renderAgreementMd(body, _regAgreementMd);
+        body.dataset.rendered = '1';
+    }
 }
 function closeAgreementModal() {
     document.getElementById('agreeModal').classList.remove('open');
@@ -244,7 +277,6 @@ function agreeAndClose() {
     if (cb) cb.checked = true;
     closeAgreementModal();
 }
-// 点击遮罩关闭
 document.getElementById('agreeModal').addEventListener('click', function(e) {
     if (e.target === this) closeAgreementModal();
 });
@@ -410,4 +442,5 @@ function startCooldown(btn, seconds) {
 }
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

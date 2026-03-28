@@ -106,27 +106,50 @@ $defs = [
     <?php if ($cur && $cur['content']): ?>
     <div id="preview-<?= $agKey ?>" style="display:none;margin-top:20px;border-top:1px solid var(--border);padding-top:20px;">
       <div style="font-size:0.82rem;font-weight:600;color:var(--text-sub);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">渲染预览</div>
-      <div class="agreement-preview-content" id="preview-content-<?= $agKey ?>">
+      <div class="agreement-preview-content" id="preview-content-<?= $agKey ?>" data-md="<?= htmlspecialchars($cur['content'], ENT_QUOTES, 'UTF-8') ?>">
         <!-- 由 JS 渲染 -->
       </div>
-      <script>
-      (function() {
-        var raw = <?= json_encode($cur['content']) ?>;
-        document.getElementById('preview-content-<?= $agKey ?>').innerHTML =
-          '<pre style="white-space:pre-wrap;font-size:0.88rem;color:var(--text-main);line-height:1.6;">' +
-          raw.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre>';
-      })();
-      </script>
     </div>
     <?php endif; ?>
   </div>
 </div>
 <?php endforeach; ?>
 
+<style>
+/* 协议预览区 Markdown 样式 */
+.agreement-preview-content h1,.agreement-preview-content h2,.agreement-preview-content h3,
+.agreement-preview-content h4,.agreement-preview-content h5,.agreement-preview-content h6 {
+    font-weight:700;margin:0.9em 0 0.35em;
+}
+.agreement-preview-content h1{font-size:1.3em;}
+.agreement-preview-content h2{font-size:1.15em;}
+.agreement-preview-content h3{font-size:1.05em;}
+.agreement-preview-content p{margin:0 0 0.65em;}
+.agreement-preview-content ul,.agreement-preview-content ol{padding-left:1.5em;margin:0 0 0.65em;}
+.agreement-preview-content li{margin-bottom:0.2em;}
+.agreement-preview-content strong{font-weight:700;}
+.agreement-preview-content em{font-style:italic;}
+.agreement-preview-content hr{border:none;border-top:1px solid var(--border);margin:1em 0;}
+.agreement-preview-content code{background:rgba(0,0,0,0.06);padding:1px 4px;border-radius:3px;font-family:monospace;}
+.agreement-preview-content pre{background:rgba(0,0,0,0.06);padding:10px;border-radius:6px;overflow-x:auto;margin:0 0 0.65em;}
+.agreement-preview-content blockquote{border-left:3px solid var(--border);padding-left:12px;color:var(--text-sub);margin:0 0 0.65em;}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script>
 function togglePreview(key) {
     var el = document.getElementById('preview-' + key);
-    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    if (!el) return false;
+    var showing = el.style.display !== 'none';
+    el.style.display = showing ? 'none' : 'block';
+    if (!showing) {
+        // 渲染 Markdown
+        var content = document.getElementById('preview-content-' + key);
+        if (content && !content.dataset.rendered && typeof marked !== 'undefined') {
+            content.innerHTML = marked.parse(content.dataset.md || '');
+            content.dataset.rendered = '1';
+        }
+    }
     return false;
 }
 </script>
