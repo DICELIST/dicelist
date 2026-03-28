@@ -10,6 +10,9 @@ if (isLoggedIn()) { header('Location: /index.php'); exit; }
 $errors   = [];
 $username = $nickname = $email = '';
 
+// 读取注册协议（前台展示用）
+$regAgreement = getAgreement('register_agreement');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $username  = trim($_POST['username']  ?? '');
@@ -18,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code      = trim($_POST['verify_code'] ?? '');
     $password  = $_POST['password']  ?? '';
     $password2 = $_POST['password2'] ?? '';
+    $agreeReg  = isset($_POST['agree_register']);
 
     // 基础验证
     if ($username === '') $errors[] = '请输入用户名';
@@ -32,6 +36,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($password === '') $errors[] = '请输入密码';
     elseif (strlen($password) < 6) $errors[] = '密码不能少于6位';
     if ($password !== $password2) $errors[] = '两次密码不一致';
+
+    // 协议勾选验证（仅在有协议内容时强制）
+    if ($regAgreement['content'] && !$agreeReg) {
+        $errors[] = '请阅读并同意注册协议后继续';
+    }
 
     if ($nickname === '') $nickname = $username;
 
@@ -95,15 +104,23 @@ $csrfToken = e(getCsrfToken());
 
       <div class="form-group">
         <label class="form-label" for="username">用户名 <span class="required">*</span></label>
-        <input type="text" id="username" name="username" class="form-control"
-               placeholder="3-30位字母、数字、下划线" value="<?= e($username) ?>" required autofocus
-               maxlength="30" autocomplete="username">
+        <div class="unique-input-wrap">
+          <input type="text" id="username" name="username" class="form-control"
+                 placeholder="3-30位字母、数字、下划线" value="<?= e($username) ?>" required autofocus
+                 maxlength="30" autocomplete="username">
+          <span class="unique-icon" id="usernameIcon"></span>
+        </div>
+        <div class="unique-hint" id="usernameHint"></div>
       </div>
 
       <div class="form-group">
         <label class="form-label" for="nickname">昵称</label>
-        <input type="text" id="nickname" name="nickname" class="form-control"
-               placeholder="显示给其他用户的名字（可选）" value="<?= e($nickname) ?>" maxlength="50">
+        <div class="unique-input-wrap">
+          <input type="text" id="nickname" name="nickname" class="form-control"
+                 placeholder="显示给其他用户的名字（可选）" value="<?= e($nickname) ?>" maxlength="50">
+          <span class="unique-icon" id="nicknameIcon"></span>
+        </div>
+        <div class="unique-hint" id="nicknameHint"></div>
       </div>
 
       <!-- 邮箱 + 验证码 -->
@@ -135,13 +152,26 @@ $csrfToken = e(getCsrfToken());
                placeholder="再次输入密码" required autocomplete="new-password">
       </div>
 
+      <?php if ($regAgreement['content']): ?>
+      <div class="form-group agreement-check-row">
+        <label class="agreement-check-label">
+          <input type="checkbox" name="agree_register" id="agreeRegister"
+                 <?= (isset($_POST['agree_register'])) ? 'checked' : '' ?> required>
+          <span>
+            我已阅读并同意
+            <a href="#" class="agreement-link" onclick="showAgreementModal('reg'); return false;">
+              《<?= e($regAgreement['title'] ?: '注册协议') ?>》
+            </a>
+          </span>
+        </label>
+      </div>
+      <?php endif; ?>
+
       <button type="submit" class="btn btn-primary w-100 btn-lg">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
         注册账号
       </button>
     </form>
-
-    <div class="auth-footer">
       已有账号？<a href="/login.php">立即登录</a>
     </div>
   </div>
@@ -155,9 +185,175 @@ $csrfToken = e(getCsrfToken());
 }
 .email-code-row input { flex: 1; min-width: 0; }
 .email-code-row .btn { flex-shrink: 0; white-space: nowrap; height: 42px; }
+.agreement-check-row { margin-top:4px; }
+.agreement-check-label { display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:0.88rem;line-height:1.5; }
+.agreement-check-label input[type=checkbox] { margin-top:3px;flex-shrink:0;width:16px;height:16px;accent-color:var(--blue-primary); }
+.agreement-link { color:var(--blue-primary);text-decoration:underline; }
+/* 协议弹窗 */
+.agreement-modal-overlay {
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2000;
+    align-items:center;justify-content:center;padding:16px;
+}
+.agreement-modal-overlay.open { display:flex; }
+.agreement-modal {
+    background:var(--white);border-radius:var(--radius-lg);width:100%;max-width:560px;
+    max-height:80vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);
+}
+.agreement-modal-head {
+    padding:16px 20px;border-bottom:1px solid var(--border);
+    display:flex;justify-content:space-between;align-items:center;
+}
+.agreement-modal-head h3 { font-size:1rem;font-weight:700;margin:0; }
+.agreement-modal-body {
+    flex:1;overflow-y:auto;padding:20px;
+    font-size:0.88rem;line-height:1.8;color:var(--text-main);
+    white-space:pre-wrap;
+}
+.agreement-modal-foot {
+    padding:14px 20px;border-top:1px solid var(--border);
+    display:flex;justify-content:flex-end;gap:10px;
+}
+</style>
+
+<?php if ($regAgreement['content']): ?>
+<!-- 协议弹窗 -->
+<div class="agreement-modal-overlay" id="agreeModal">
+  <div class="agreement-modal">
+    <div class="agreement-modal-head">
+      <h3><?= e($regAgreement['title'] ?: '注册协议') ?></h3>
+      <button type="button" onclick="closeAgreementModal()" style="background:none;border:none;cursor:pointer;font-size:1.4rem;color:var(--text-sub);line-height:1;">&times;</button>
+    </div>
+    <div class="agreement-modal-body"><?= e($regAgreement['content']) ?></div>
+    <div class="agreement-modal-foot">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="closeAgreementModal()">关闭</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="agreeAndClose()">我已阅读，同意</button>
+    </div>
+  </div>
+</div>
+<script>
+function showAgreementModal(type) {
+    document.getElementById('agreeModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeAgreementModal() {
+    document.getElementById('agreeModal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+function agreeAndClose() {
+    var cb = document.getElementById('agreeRegister');
+    if (cb) cb.checked = true;
+    closeAgreementModal();
+}
+// 点击遮罩关闭
+document.getElementById('agreeModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAgreementModal();
+});
+</script>
+<?php endif; ?>
+
+<style>
+/* 唯一性检测输入框 */
+.unique-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.unique-input-wrap .form-control {
+    padding-right: 36px;
+}
+.unique-icon {
+    position: absolute;
+    right: 10px;
+    font-size: 1.1rem;
+    line-height: 1;
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+.unique-icon.ok    { color: #34c759; }
+.unique-icon.error { color: #ff3b30; }
+.unique-icon.loading { color: #aaa; font-size: 0.85rem; }
+.unique-hint {
+    font-size: 0.80rem;
+    margin-top: 4px;
+    min-height: 1.1em;
+    transition: all 0.15s;
+}
+.unique-hint.ok    { color: #34c759; }
+.unique-hint.error { color: #ff3b30; }
 </style>
 
 <script>
+/* ===== 用户名 / 昵称 唯一性实时检测 ===== */
+function setupUniqueCheck(inputId, iconId, hintId, type, excludeId) {
+    var input = document.getElementById(inputId);
+    var icon  = document.getElementById(iconId);
+    var hint  = document.getElementById(hintId);
+    if (!input) return;
+
+    var timer = null;
+
+    function clear() {
+        icon.textContent = '';
+        icon.className   = 'unique-icon';
+        hint.textContent = '';
+        hint.className   = 'unique-hint';
+    }
+
+    function check() {
+        var val = input.value.trim();
+        if (val === '') { clear(); return; }
+
+        // 立即显示加载状态
+        icon.textContent = '…';
+        icon.className   = 'unique-icon loading';
+        hint.textContent = '检测中...';
+        hint.className   = 'unique-hint';
+
+        var url = '/check_unique.php?type=' + encodeURIComponent(type)
+                + '&value=' + encodeURIComponent(val)
+                + (excludeId ? '&exclude_id=' + excludeId : '');
+
+        fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    icon.textContent = '✓';
+                    icon.className   = 'unique-icon ok';
+                    hint.textContent = data.msg;
+                    hint.className   = 'unique-hint ok';
+                } else {
+                    icon.textContent = '✗';
+                    icon.className   = 'unique-icon error';
+                    hint.textContent = data.msg;
+                    hint.className   = 'unique-hint error';
+                }
+            })
+            .catch(function() { clear(); });
+    }
+
+    // 失焦时立即检测
+    input.addEventListener('blur', function() {
+        clearTimeout(timer);
+        check();
+    });
+
+    // 输入停止 600ms 后检测（防抖）
+    input.addEventListener('input', function() {
+        clear();
+        clearTimeout(timer);
+        if (input.value.trim() !== '') {
+            timer = setTimeout(check, 600);
+        }
+    });
+}
+
+// 注册页：用户名（无 exclude_id）、昵称（可选，无 exclude_id）
+document.addEventListener('DOMContentLoaded', function() {
+    setupUniqueCheck('username', 'usernameIcon', 'usernameHint', 'username', 0);
+    setupUniqueCheck('nickname', 'nicknameIcon', 'nicknameHint', 'nickname', 0);
+});
+/* ===== END 唯一性检测 ===== */
+
 var sendCodeCooldown = 0;
 var sendCodeTimer = null;
 

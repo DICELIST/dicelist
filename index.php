@@ -17,7 +17,7 @@ $page      = max(1, (int)($_GET['page'] ?? 1));
 $perPage   = PER_PAGE;
 
 // ======== 构建查询 ========
-$where  = ['1=1'];
+$where  = ['b.review_status = 1', 'u.is_banned = 0'];  // 只显示审核通过且作者未封禁的内容
 $params = [];
 
 if ($keyword !== '') {
@@ -35,7 +35,7 @@ $whereStr = implode(' AND ', $where);
 $orderStr = ($sortBy === 'view_count') ? 'b.view_count DESC, b.created_at DESC' : 'b.created_at DESC';
 
 // 总数
-$countSql = "SELECT COUNT(*) FROM bots b WHERE $whereStr";
+$countSql = "SELECT COUNT(*) FROM bots b LEFT JOIN users u ON b.user_id=u.id WHERE $whereStr";
 $countStmt = $pdo->prepare($countSql);
 $countStmt->execute($params);
 $total = (int)$countStmt->fetchColumn();
@@ -60,9 +60,9 @@ $optBlacklist = getOptions('blacklist');
 $optStatus    = getOptions('status');
 
 // 统计数字
-$totalBots    = (int)$pdo->query('SELECT COUNT(*) FROM bots')->fetchColumn();
-$totalUsers   = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
-$onlineBots   = (int)$pdo->query("SELECT COUNT(*) FROM bots WHERE status='在线'")->fetchColumn();
+$totalBots    = (int)$pdo->query('SELECT COUNT(*) FROM bots WHERE review_status=1')->fetchColumn();
+$totalUsers   = (int)$pdo->query('SELECT COUNT(*) FROM users WHERE is_banned=0')->fetchColumn();
+$onlineBots   = (int)$pdo->query("SELECT COUNT(*) FROM bots WHERE status='在线' AND review_status=1")->fetchColumn();
 
 // 分页链接基础URL
 $baseQuery = http_build_query(array_filter([
@@ -114,6 +114,32 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <div class="container">
+  <?php
+  $announcements = getActiveAnnouncements();
+  if ($announcements):
+  ?>
+  <div class="announcements-wrap mt-3">
+    <?php foreach ($announcements as $ann): ?>
+    <div class="announcement announcement-<?= e($ann['type']) ?>">
+      <div class="announcement-icon">
+        <?php if ($ann['type'] === 'warning'): ?>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <?php elseif ($ann['type'] === 'danger'): ?>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <?php elseif ($ann['type'] === 'success'): ?>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <?php else: ?>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <?php endif; ?>
+      </div>
+      <div class="announcement-body">
+        <?php if ($ann['title']): ?><strong><?= e($ann['title']) ?></strong><?php endif; ?>
+        <div class="announcement-content"><?= $ann['content'] ?></div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
   <!-- 搜索 & 筛选栏 -->
   <form method="GET" action="/index.php" id="filterForm">
     <div class="search-bar mt-3 mb-2">

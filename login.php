@@ -17,11 +17,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($account === '') $errors[] = '请输入账号';
     if ($password === '') $errors[] = '请输入密码';
 
+    // IP 登录失败次数限制
+    if (empty($errors) && !checkLoginAttempts()) {
+        $errors[] = '今日登录失败次数过多，请明天再试或联系管理员';
+    }
+
     if (empty($errors)) {
         $pdo = getDB();
         // 按用户名、昵称、邮箱三路查找
         $stmt = $pdo->prepare(
-            'SELECT id, username, password, nickname, is_admin
+            'SELECT id, username, password, nickname, is_admin, is_super, is_banned, ban_reason
              FROM users
              WHERE username = ? OR nickname = ? OR email = ?
              LIMIT 1'
@@ -30,19 +35,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
-            initSession();
-            session_regenerate_id(true);
-            $_SESSION['user_id'] = $user['id'];
-            setFlash('success', '欢迎回来，' . ($user['nickname'] ?: $user['username']) . '！');
-            // 防止重定向注入：只允许站内路径
-            $redirect = $_GET['redirect'] ?? '';
-            if (!preg_match('/^\/[a-zA-Z0-9\-_.\/\?=&%]*$/', $redirect)) {
-                $redirect = '/index.php';
+            // 封禁检查
+            if ($user['is_banned']) {
+                $reason = $user['ban_reason'] ? '原因：' . $user['ban_reason'] : '';
+                $errors[] = '该账号已被封禁，无法登录。' . $reason;
+            } else {
+                // 超级管理员设备绑定校验
+                if ($user['is_super']) {
+                    $boundDevice = getSiteSetting('super_admin_device', '');
+                    if ($boundDevice !== '') {
+                        $curDevice = getSuperDeviceFingerprint();
+                        if ($curDevice !== $boundDevice) {
+                            $errors[] = '超级管理员账号只能从绑定设备登录，当前设备未授权。';
+                            recordLoginFailure($account);
+                        }
+                    } else {
+                        // 首次登录，自动绑定当前设备
+                        $curDevice = getSuperDeviceFingerprint();
+                        setSiteSetting('super_admin_device', $curDevice);
+                    }
+                }
+
+                if (empty($errors)) {
+                    initSession();
+                    session_regenerate_id(true);
+                    $_SESSION['user_id'] = $user['id'];
+                    setFlash('success', '欢迎回来，' . ($user['nickname'] ?: $user['username']) . '！');
+                    // 防止重定向注入：只允许站内路径
+                    $redirect = $_GET['redirect'] ?? '';
+                    if (!preg_match('/^\/[a-zA-Z0-9\-_.\/\?=&%]*$/', $redirect)) {
+                        $redirect = '/index.php';
+                    }
+                    header('Location: ' . $redirect);
+                    exit;
+                }
             }
-            header('Location: ' . $redirect);
-            exit;
         } else {
             $errors[] = '账号或密码错误';
+            recordLoginFailure($account);
         }
     }
 }

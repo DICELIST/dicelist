@@ -955,6 +955,92 @@ footer::before {
 
 .footer-icp a:hover { color: rgba(255,255,255,0.65); }
 
+/* ======== 友情链接（页脚） ======== */
+.footer-links-wrap {
+    border-bottom: 1px solid rgba(10,132,255,0.1);
+    padding: 16px 0;
+}
+
+.footer-links-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+}
+
+.footer-links-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.footer-link-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: rgba(255,255,255,0.45);
+    font-size: 0.8rem;
+    text-decoration: none;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: var(--transition);
+    background: rgba(255,255,255,0.03);
+}
+
+.footer-link-item:hover {
+    color: rgba(255,255,255,0.8);
+    background: rgba(10,132,255,0.1);
+    border-color: rgba(10,132,255,0.3);
+}
+
+.footer-link-logo {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    object-fit: contain;
+}
+
+/* ======== 公告条目样式 ======== */
+.announcements-wrap {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.announcement {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-size: 0.88rem;
+    line-height: 1.6;
+}
+
+.announcement-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+}
+
+.announcement-info    { background: var(--blue-light); border-color: rgba(10,132,255,0.2); color: var(--blue-dark); }
+.announcement-warning { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: #92400e; }
+.announcement-success { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25); color: #065f46; }
+.announcement-danger  { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); color: #991b1b; }
+
+.announcement-content strong { font-weight: 700; display: block; margin-bottom: 2px; }
+
+.announcement-badge-info    { background:rgba(10,132,255,0.12); color:var(--blue-primary); }
+.announcement-badge-warning { background:rgba(245,158,11,0.12); color:#d97706; }
+.announcement-badge-success { background:rgba(16,185,129,0.12); color:#059669; }
+.announcement-badge-danger  { background:rgba(239,68,68,0.12); color:#ef4444; }
+
 /* ======== 页面标题区 ======== */
 .page-header {
     padding: 32px 0 24px;

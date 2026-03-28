@@ -1,10 +1,12 @@
 <?php
 /**
  * 管理后台 - 下拉选项管理
+ * POST 处理必须在 require header.php 之前，否则 HTML 已输出无法再 header()
  */
-$adminPageTitle = '下拉选项管理';
-require_once __DIR__ . '/header.php';
+require_once __DIR__ . '/../includes/functions.php';
+requireAdmin();
 $pdo = getDB();
+$currentUser = getCurrentUser();
 
 $typeLabels = [
     'platform'  => '对接平台',
@@ -71,6 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Location: /admin/options.php' . (isset($_POST['type']) ? '#type-'.$_POST['type'] : ''));
     exit;
 }
+
+$adminPageTitle = '下拉选项管理';
+require_once __DIR__ . '/header.php';
 
 $currentType = $_GET['type'] ?? 'platform';
 if (!isset($typeLabels[$currentType])) $currentType = 'platform';

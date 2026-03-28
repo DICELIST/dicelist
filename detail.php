@@ -11,6 +11,30 @@ if ($id <= 0) {
     exit;
 }
 
+$currentUser = getCurrentUser();
+
+// ======== 管理员审核操作（POST，必须在HTML输出前完成跳转）========
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $currentUser && $currentUser['is_admin']) {
+    verifyCsrf();
+    $action = $_POST['action'] ?? '';
+    $bid    = (int)($_POST['bid'] ?? 0);
+
+    if ($bid === $id) {
+        if ($action === 'approve') {
+            $pdo->prepare('UPDATE bots SET review_status=1, reviewed_at=NOW(), reviewed_by=? WHERE id=?')
+                ->execute([$currentUser['id'], $bid]);
+            setFlash('success', '已通过审核，Bot对外可见');
+        } elseif ($action === 'reject') {
+            $remark = trim($_POST['review_remark'] ?? '不符合平台规范');
+            $pdo->prepare('UPDATE bots SET review_status=2, review_remark=?, reviewed_at=NOW(), reviewed_by=? WHERE id=?')
+                ->execute([$remark, $currentUser['id'], $bid]);
+            setFlash('success', '已拒绝，内容移入回收站');
+        }
+    }
+    header('Location: /detail.php?id=' . $id);
+    exit;
+}
+
 // 获取Bot信息
 $stmt = $pdo->prepare(
     'SELECT b.*, u.nickname AS author_nickname, u.username AS author_username, u.id AS author_id
@@ -34,7 +58,6 @@ if (!$bot) {
 $pdo->prepare('UPDATE bots SET view_count = view_count + 1 WHERE id = ?')->execute([$id]);
 $bot['view_count'] += 1;
 
-$currentUser = getCurrentUser();
 $canEdit = $currentUser && ($currentUser['id'] == $bot['user_id'] || $currentUser['is_admin']);
 
 $pageTitle = e($bot['nickname']) . ' - Bot详情';
@@ -57,6 +80,26 @@ require_once __DIR__ . '/includes/header.php';
 
   <!-- 详情主体 -->
   <div class="detail-fields">
+    <!-- 审核状态提示（仅作者/管理员可见） -->
+    <?php if ($canEdit): ?>
+    <?php if ($bot['review_status'] == 0): ?>
+    <div class="alert" style="background:#fff8e8;border:1px solid #f5a623;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:0.88rem;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span style="color:#92600a;">此内容正在<strong>等待审核</strong>，暂时对外不可见。</span>
+    </div>
+    <?php elseif ($bot['review_status'] == 2): ?>
+    <div class="alert" style="background:#fff0f0;border:1px solid #ff3b30;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:0.88rem;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span style="color:#c0392b;">此内容已被<strong>拒绝</strong>，对外不可见。</span>
+      </div>
+      <?php if ($bot['review_remark']): ?>
+      <div style="margin-top:6px;padding-left:26px;color:#c0392b;">拒绝原因：<?= e($bot['review_remark']) ?></div>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+    <?php endif; ?>
+
     <!-- 标题区 -->
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
       <div>
@@ -83,7 +126,34 @@ require_once __DIR__ . '/includes/header.php';
         </div>
       </div>
       <?php if ($canEdit): ?>
-      <div class="d-flex gap-1">
+      <div class="d-flex gap-1" style="flex-wrap:wrap;align-items:center;">
+        <?php if ($currentUser['is_admin']): ?>
+        <!-- 管理员审核按钮 -->
+        <?php if ($bot['review_status'] == 0): ?>
+        <form method="POST" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+          <input type="hidden" name="action" value="approve">
+          <input type="hidden" name="bid" value="<?= $bot['id'] ?>">
+          <button type="submit" class="btn btn-sm" style="background:#34c759;color:#fff;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            通过
+          </button>
+        </form>
+        <button type="button" class="btn btn-danger btn-sm" onclick="openDetailReject()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          拒绝
+        </button>
+        <?php elseif ($bot['review_status'] == 1): ?>
+        <button type="button" class="btn btn-warning btn-sm" onclick="openDetailReject()">撤回</button>
+        <?php elseif ($bot['review_status'] == 2): ?>
+        <form method="POST" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+          <input type="hidden" name="action" value="approve">
+          <input type="hidden" name="bid" value="<?= $bot['id'] ?>">
+          <button type="submit" class="btn btn-sm btn-outline" style="color:var(--blue-primary);">重新通过</button>
+        </form>
+        <?php endif; ?>
+        <?php endif; ?>
         <a href="/edit.php?id=<?= $bot['id'] ?>" class="btn btn-outline btn-sm">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           编辑
@@ -204,6 +274,35 @@ require_once __DIR__ . '/includes/header.php';
     </a>
   </div>
 </div>
+
+<!-- 拒绝弹窗（仅管理员可用） -->
+<?php if ($currentUser && $currentUser['is_admin']): ?>
+<div id="detailRejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:12px;max-width:400px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <h3 style="margin-bottom:16px;">填写拒绝原因</h3>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+      <input type="hidden" name="action" value="reject">
+      <input type="hidden" name="bid" value="<?= $bot['id'] ?>">
+      <div class="form-group">
+        <textarea name="review_remark" class="form-control" rows="3" placeholder="请填写拒绝原因（用户可见）" required><?= e($bot['review_remark'] ?? '') ?></textarea>
+      </div>
+      <div class="d-flex gap-2 justify-end">
+        <button type="button" onclick="document.getElementById('detailRejectModal').style.display='none'" class="btn btn-ghost">取消</button>
+        <button type="submit" class="btn btn-danger">确认拒绝</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function openDetailReject() {
+    document.getElementById('detailRejectModal').style.display = 'flex';
+}
+document.getElementById('detailRejectModal').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+</script>
+<?php endif; ?>
 
 <!-- 复制 & 离站弹窗 -->
 <script>

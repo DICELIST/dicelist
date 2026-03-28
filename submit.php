@@ -32,19 +32,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($data['nickname'] === '') $errors[] = '昵称不能为空';
     if ($data['platform'] === '') $errors[] = '请选择对接平台';
 
+    // 发布协议勾选
+    if (empty($_POST['agree_publish'])) {
+        $errors[] = '请阅读并同意发布协议后提交';
+    }
+
     if (empty($errors)) {
-        $sql = 'INSERT INTO bots (user_id, platform, nickname, id_url, framework, owner, mode, blacklist, status, invite_condition, remarks, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $reviewStatus = isReviewRequired() ? 0 : 1; // 0=待审核 1=直接通过
+        $sql = 'INSERT INTO bots (user_id, review_status, platform, nickname, id_url, framework, owner, mode, blacklist, status, invite_condition, remarks, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $pdo->prepare($sql)->execute([
             $currentUser['id'],
+            $reviewStatus,
             $data['platform'], $data['nickname'], $data['id_url'],
             $data['framework'], $data['owner'], $data['mode'],
             $data['blacklist'], $data['status'], $data['invite_condition'],
             $data['remarks'], $data['description'],
         ]);
         $newId = $pdo->lastInsertId();
-        setFlash('success', 'Bot提交成功！');
-        header('Location: /detail.php?id=' . $newId);
+        // 删除关联草稿
+        if (!empty($_POST['draft_id'])) {
+            $pdo->prepare('DELETE FROM bot_drafts WHERE id=? AND user_id=?')
+                ->execute([(int)$_POST['draft_id'], $currentUser['id']]);
+        }
+        if ($reviewStatus === 0) {
+            setFlash('success', 'Bot已提交，等待管理员审核后将对外显示！');
+            header('Location: /profile.php');
+        } else {
+            setFlash('success', 'Bot提交成功！');
+            header('Location: /detail.php?id=' . $newId);
+        }
         exit;
     }
 }
@@ -55,6 +72,23 @@ $optFramework = getOptions('framework');
 $optMode      = getOptions('mode');
 $optBlacklist = getOptions('blacklist');
 $optStatus    = getOptions('status');
+
+// 读取草稿
+$draftId = (int)($_GET['draft'] ?? 0);
+$draft = null;
+if ($draftId > 0) {
+    $ds = $pdo->prepare('SELECT * FROM bot_drafts WHERE id=? AND user_id=?');
+    $ds->execute([$draftId, $currentUser['id']]);
+    $draft = $ds->fetch();
+    if ($draft) {
+        foreach ($data as $k => $_) {
+            if (isset($draft[$k])) $data[$k] = $draft[$k];
+        }
+    }
+}
+
+// 读取发布协议
+$publishAgreement = getAgreement('publish_agreement');
 
 $pageTitle = '提交Bot';
 require_once __DIR__ . '/includes/header.php';
@@ -187,12 +221,53 @@ require_once __DIR__ . '/includes/header.php';
       </div>
     </div>
 
-    <div class="d-flex gap-2 mt-3 mb-4 justify-center">
-      <a href="/profile.php" class="btn btn-ghost btn-lg">取消</a>
-      <button type="submit" class="btn btn-primary btn-lg">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
-        提交Bot
-      </button>
+    <div class="d-flex gap-2 mt-3 mb-4 justify-center" style="flex-direction:column;align-items:center;gap:14px;">
+      <input type="hidden" name="draft_id" value="<?= $draftId ?>">
+
+      <!-- 发布协议 -->
+      <?php if ($publishAgreement['content']): ?>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.88rem;color:var(--text-main);">
+        <input type="checkbox" name="agree_publish" id="agreePublishCheck" value="1" required
+               style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue-primary);"
+               <?= !empty($_POST['agree_publish']) ? 'checked' : '' ?>>
+        我已阅读并同意
+        <a href="javascript:void(0)" onclick="showPublishAgreementModal()"
+           style="color:var(--blue-primary);text-decoration:underline;text-underline-offset:3px;">
+          《<?= e($publishAgreement['title']) ?>》
+        </a>
+      </label>
+
+      <!-- 发布协议弹窗 -->
+      <div id="publishAgreementModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:#fff;border-radius:16px;max-width:600px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+            <h3 style="font-size:1.05rem;font-weight:700;margin:0;"><?= e($publishAgreement['title']) ?></h3>
+            <button type="button" onclick="document.getElementById('publishAgreementModal').style.display='none'"
+                    style="background:none;border:none;cursor:pointer;font-size:1.4rem;line-height:1;color:var(--text-sub);padding:4px;">×</button>
+          </div>
+          <div style="overflow-y:auto;padding:20px 24px;font-size:0.88rem;line-height:1.7;color:var(--text-main);">
+            <?= $publishAgreement['content'] ?>
+          </div>
+          <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:12px;flex-shrink:0;">
+            <button type="button" onclick="document.getElementById('publishAgreementModal').style.display='none'"
+                    class="btn btn-ghost" style="flex:1;">关闭</button>
+            <button type="button" onclick="publishAgreeAndClose()" class="btn btn-primary" style="flex:1;">同意并继续</button>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <div class="d-flex gap-2">
+        <a href="/profile.php" class="btn btn-ghost btn-lg">取消</a>
+        <button type="button" class="btn btn-outline btn-lg" id="saveDraftBtn" onclick="saveDraft()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v14a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+          保存草稿
+        </button>
+        <button type="submit" class="btn btn-primary btn-lg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+          提交Bot
+        </button>
+      </div>
     </div>
   </form>
 </div>
@@ -204,6 +279,73 @@ require_once __DIR__ . '/includes/header.php';
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     initMarkdownPreview('mdEditor', 'mdPreview');
+    // 每60秒自动保存草稿
+    setInterval(saveDraftAuto, 60000);
+
+    // 点击协议弹窗蒙层关闭
+    var modal = document.getElementById('publishAgreementModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+    }
+});
+
+function showPublishAgreementModal() {
+    var m = document.getElementById('publishAgreementModal');
+    if (m) m.style.display = 'flex';
+}
+
+function publishAgreeAndClose() {
+    var cb = document.getElementById('agreePublishCheck');
+    if (cb) cb.checked = true;
+    var m = document.getElementById('publishAgreementModal');
+    if (m) m.style.display = 'none';
+}
+
+var draftId = <?= $draftId ?: 'null' ?>;
+
+function getFormData() {
+    var form = document.querySelector('form[method="POST"]');
+    var fd = new FormData(form);
+    return fd;
+}
+
+function saveDraft() {
+    var btn = document.getElementById('saveDraftBtn');
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+    var fd = getFormData();
+    fd.append('_draft_action', 'save');
+    if (draftId) fd.set('draft_id', draftId);
+    fetch('/draft_save.php', {method:'POST', body:fd})
+        .then(r=>r.json()).then(data=>{
+            if (data.ok) {
+                draftId = data.draft_id;
+                document.querySelector('input[name="draft_id"]').value = draftId;
+                btn.textContent = '已保存 ✓';
+                setTimeout(()=>{ btn.disabled=false; btn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v14a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg> 保存草稿'; }, 2000);
+            } else {
+                btn.disabled=false; btn.textContent='保存失败，重试';
+            }
+        }).catch(()=>{ btn.disabled=false; btn.textContent='保存草稿'; });
+}
+
+function saveDraftAuto() {
+    var fd = getFormData();
+    fd.append('_draft_action', 'save');
+    if (draftId) fd.set('draft_id', draftId);
+    fetch('/draft_save.php', {method:'POST', body:fd})
+        .then(r=>r.json()).then(data=>{ if(data.ok && data.draft_id) draftId=data.draft_id; });
+}
+
+// 离开页面提示
+window.addEventListener('beforeunload', function(e) {
+    var form = document.querySelector('form[method="POST"]');
+    if (form && form.querySelector('textarea[name="description"]').value.trim()) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
 });
 </script>
 
