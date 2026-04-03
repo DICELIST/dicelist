@@ -13,9 +13,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $account  = trim($_POST['account']  ?? '');
     $password = $_POST['password'] ?? '';
+    $captcha  = strtolower(trim($_POST['captcha'] ?? ''));
 
     if ($account === '') $errors[] = '请输入账号';
     if ($password === '') $errors[] = '请输入密码';
+
+    // 图形验证码校验
+    initSession();
+    if (empty($errors)) {
+        $savedCaptcha = strtolower($_SESSION['captcha_code'] ?? '');
+        if ($savedCaptcha === '' || $captcha === '') {
+            $errors[] = '请输入图形验证码';
+        } elseif ($captcha !== $savedCaptcha) {
+            $errors[] = '图形验证码错误，请重试';
+            unset($_SESSION['captcha_code']);
+        } else {
+            unset($_SESSION['captcha_code']);
+        }
+    }
 
     // IP 登录失败次数限制
     if (empty($errors) && !checkLoginAttempts()) {
@@ -60,6 +75,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     initSession();
                     session_regenerate_id(true);
                     $_SESSION['user_id'] = $user['id'];
+                    // 保持登录
+                    if (!empty($_POST['remember_me'])) {
+                        setRememberMeToken((int)$user['id']);
+                    }
                     setFlash('success', '欢迎回来，' . ($user['nickname'] ?: $user['username']) . '！');
                     // 防止重定向注入：只允许站内路径
                     $redirect = $_GET['redirect'] ?? '';
@@ -111,6 +130,25 @@ require_once __DIR__ . '/includes/header.php';
         <input type="password" id="password" name="password" class="form-control"
                placeholder="输入密码" required autocomplete="current-password">
       </div>
+      <div class="form-group">
+        <label class="form-label">图形验证码</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="loginCaptcha" name="captcha" class="form-control"
+                 placeholder="输入图中字符" maxlength="4" required autocomplete="off"
+                 style="flex:1;letter-spacing:4px;font-size:1rem;font-weight:600;text-transform:uppercase;">
+          <img src="/captcha.php" id="loginCaptchaImg"
+               style="height:40px;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;"
+               onclick="this.src='/captcha.php?t='+Date.now()" title="点击刷新">
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">看不清？<a href="#" onclick="document.getElementById('loginCaptchaImg').src='/captcha.php?t='+Date.now();return false;" style="color:var(--blue-primary);">点击刷新</a></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:0.88rem;color:var(--text-main);user-select:none;">
+          <input type="checkbox" name="remember_me" value="1"
+                 style="width:16px;height:16px;accent-color:var(--blue-primary);cursor:pointer;">
+          保持登录（30天）
+        </label>
+      </div>
       <button type="submit" class="btn btn-primary w-100 btn-lg">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
         登录
@@ -122,5 +160,18 @@ require_once __DIR__ . '/includes/header.php';
     </div>
   </div>
 </div>
+
+
+<?php if (!empty($errors)): ?>
+<script>
+// 登录失败：自动刷新图形验证码
+document.addEventListener('DOMContentLoaded', function() {
+    var img = document.getElementById('loginCaptchaImg');
+    if (img) img.src = '/captcha.php?t=' + Date.now();
+    var inp = document.getElementById('loginCaptcha');
+    if (inp) inp.value = '';
+});
+</script>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

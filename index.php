@@ -17,8 +17,16 @@ $page      = max(1, (int)($_GET['page'] ?? 1));
 $perPage   = PER_PAGE;
 
 // ======== 构建查询 ========
-$where  = ['b.review_status = 1', 'u.is_banned = 0'];  // 只显示审核通过且作者未封禁的内容
-$params = [];
+// 已登录：审核通过的所有人可见；自己发布的待审核内容自己也能看
+$currentUser = getCurrentUser();
+$myId = $currentUser ? (int)$currentUser['id'] : 0;
+if ($myId > 0) {
+    $where  = ['(b.review_status = 1 OR (b.review_status = 0 AND b.user_id = ?))', 'u.is_banned = 0'];
+    $params = [$myId];
+} else {
+    $where  = ['b.review_status = 1', 'u.is_banned = 0'];
+    $params = [];
+}
 
 if ($keyword !== '') {
     $where[]  = '(b.nickname LIKE ? OR b.owner LIKE ? OR b.id_url LIKE ? OR b.remarks LIKE ?)';
@@ -214,10 +222,16 @@ require_once __DIR__ . '/includes/header.php';
   <?php else: ?>
   <div class="bot-grid">
     <?php foreach ($bots as $bot): ?>
-    <div class="bot-card">
+    <div class="bot-card <?= $bot['review_status'] == 0 ? 'bot-card-pending' : '' ?>">
       <div class="bot-card-head">
         <a href="/detail.php?id=<?= $bot['id'] ?>" class="bot-card-title"><?= e($bot['nickname']) ?></a>
         <div class="bot-card-badges">
+          <?php if ($bot['review_status'] == 0): ?>
+          <span class="badge badge-warning badge-pending-review">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:2px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            审核中
+          </span>
+          <?php endif; ?>
           <?php if ($bot['status']): ?>
           <span class="badge status-<?= e($bot['status']) ?>"><?= e($bot['status']) ?></span>
           <?php endif; ?>
@@ -277,4 +291,16 @@ require_once __DIR__ . '/includes/header.php';
   <?= buildPagination($total, $page, $perPage, $paginationUrl) ?>
 </div>
 
+
+<style>
+.bot-card-pending {
+    border: 1px dashed var(--warning, #f59e0b) !important;
+    opacity: 0.85;
+}
+.badge-pending-review {
+    background: rgba(245,158,11,0.12);
+    color: #b45309;
+    border: 1px solid rgba(245,158,11,0.3);
+}
+</style>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

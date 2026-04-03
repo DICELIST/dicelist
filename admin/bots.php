@@ -4,6 +4,7 @@
  * POST 处理必须在 require header.php 之前，否则 HTML 已输出无法再 header()
  */
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/mailer.php';
 requireAdmin();
 $pdo = getDB();
 $currentUser = getCurrentUser();
@@ -19,25 +20,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $b->execute([$bid]);
         $bname = $b->fetchColumn();
         $pdo->prepare('DELETE FROM bots WHERE id=?')->execute([$bid]);
-        logAdminAction('删除Bot', 'bot', $bid, "Bot：{$bname}");
+        logAdminAction('delete_bot', 'bot', $bid, "Bot：{$bname}");
         setFlash('success', 'Bot已删除');
 
     } elseif ($action === 'approve' && $bid > 0) {
+        // 查询 Bot 及发布者邮箱（用于通知）
+        $bInfo = $pdo->prepare('SELECT b.nickname, b.user_id, u.email, u.username, u.nickname AS unick
+            FROM bots b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=?');
+        $bInfo->execute([$bid]);
+        $bRow = $bInfo->fetch();
+
         $pdo->prepare('UPDATE bots SET review_status=1, reviewed_at=NOW(), reviewed_by=? WHERE id=?')
             ->execute([$currentUser['id'], $bid]);
-        logAdminAction('审核通过Bot', 'bot', $bid);
+        logAdminAction('approve_bot', 'bot', $bid);
+
+        // 发送通知邮件
+        if ($bRow && $bRow['email']) {
+            $siteName = getSiteSetting('site_name', 'TRPG Bot 导航');
+            $uname = $bRow['unick'] ?: $bRow['username'];
+            $tpl = renderMailTemplate('bot_approved', [
+                'site_name' => $siteName,
+                'username'  => $uname,
+                'bot_name'  => $bRow['nickname'],
+                'bot_url'   => 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dicelist.cn') . '/detail.php?id=' . $bid,
+            ]);
+            smtpSend($bRow['email'], $tpl['subject'], $tpl['body']);
+        }
+
         setFlash('success', '已通过审核，Bot对外可见');
 
     } elseif ($action === 'reject' && $bid > 0) {
-        $remark = trim($_POST['review_remark'] ?? '不符合平台规范');
+        $remark = trim($_POST['review_remark'] ?? '');
+        if ($remark === '') $remark = '内容违规';
+
+        // 查询 Bot 及发布者邮箱
+        $bInfo = $pdo->prepare('SELECT b.nickname, b.user_id, u.email, u.username, u.nickname AS unick
+            FROM bots b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=?');
+        $bInfo->execute([$bid]);
+        $bRow = $bInfo->fetch();
+
         $pdo->prepare('UPDATE bots SET review_status=2, review_remark=?, reviewed_at=NOW(), reviewed_by=? WHERE id=?')
             ->execute([$remark, $currentUser['id'], $bid]);
-        logAdminAction('审核拒绝Bot', 'bot', $bid, "原因：{$remark}");
+        logAdminAction('reject_bot', 'bot', $bid, "原因：{$remark}");
+
+        // 发送通知邮件
+        if ($bRow && $bRow['email']) {
+            $siteName = getSiteSetting('site_name', 'TRPG Bot 导航');
+            $uname = $bRow['unick'] ?: $bRow['username'];
+            $tpl = renderMailTemplate('bot_rejected', [
+                'site_name' => $siteName,
+                'username'  => $uname,
+                'bot_name'  => $bRow['nickname'],
+                'reject_reason' => $remark,
+                'edit_url'  => 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dicelist.cn') . '/edit.php?id=' . $bid,
+            ]);
+            smtpSend($bRow['email'], $tpl['subject'], $tpl['body']);
+        }
+
         setFlash('success', '已拒绝，内容移入用户回收站');
+
+    } elseif ($action === 'revoke' && $bid > 0) {
+        $remark = trim($_POST['review_remark'] ?? '');
+        if ($remark === '') $remark = '内容违规';
+
+        // 查询 Bot 及发布者邮箱
+        $bInfo = $pdo->prepare('SELECT b.nickname, b.user_id, u.email, u.username, u.nickname AS unick
+            FROM bots b LEFT JOIN users u ON b.user_id=u.id WHERE b.id=?');
+        $bInfo->execute([$bid]);
+        $bRow = $bInfo->fetch();
+
+        $pdo->prepare('UPDATE bots SET review_status=2, review_remark=?, reviewed_at=NOW(), reviewed_by=? WHERE id=?')
+            ->execute([$remark, $currentUser['id'], $bid]);
+        logAdminAction('revoke_bot', 'bot', $bid, "原因：{$remark}");
+
+        // 发送撤回通知邮件
+        if ($bRow && $bRow['email']) {
+            $siteName = getSiteSetting('site_name', 'TRPG Bot 导航');
+            $uname = $bRow['unick'] ?: $bRow['username'];
+            $tpl = renderMailTemplate('bot_revoked', [
+                'site_name'     => $siteName,
+                'username'      => $uname,
+                'bot_name'      => $bRow['nickname'],
+                'revoke_reason' => $remark,
+                'edit_url'      => 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dicelist.cn') . '/edit.php?id=' . $bid,
+            ]);
+            smtpSend($bRow['email'], $tpl['subject'], $tpl['body']);
+        }
+
+        setFlash('success', '已撤回，内容移入用户回收站');
     }
 
     header('Location: /admin/bots.php' . ($_SERVER['QUERY_STRING'] ? '?'.$_SERVER['QUERY_STRING'] : ''));
     exit;
+}
+// 兜底：POST 有 action/bid 但没匹配任何分支，记录到错误日志
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!empty($_POST['action']) || !empty($_POST['bid']))) {
+    error_log("[Admin/bots] 未匹配的操作: action=" . ($_POST['action'] ?? '') . ", bid=" . ((int)($_POST['bid'] ?? 0)));
 }
 
 $adminPageTitle = 'Bot管理';
@@ -102,20 +180,43 @@ $paginationUrl = '/admin/bots.php?' . http_build_query(array_filter(['q'=>$keywo
   </form>
 </div>
 
-<!-- 批量拒绝备注弹窗 -->
+<!-- 拒绝原因弹窗 -->
 <div id="rejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;padding:20px;">
-  <div style="background:#fff;border-radius:12px;max-width:400px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-    <h3 style="margin-bottom:16px;">填写拒绝原因</h3>
+  <div style="background:#fff;border-radius:12px;max-width:420px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <h3 style="margin-bottom:6px;">填写拒绝原因</h3>
+    <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:16px;">不填写则默认使用「内容违规」</p>
     <form method="POST" id="rejectForm">
       <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
       <input type="hidden" name="action" value="reject">
       <input type="hidden" name="bid" id="rejectBid">
       <div class="form-group">
-        <textarea name="review_remark" class="form-control" rows="3" placeholder="请填写拒绝原因（用户可见）" required></textarea>
+        <textarea name="review_remark" id="rejectRemark" class="form-control" rows="3"
+                  placeholder="不填写则默认「内容违规」（用户可见）"></textarea>
       </div>
       <div class="d-flex gap-2 justify-end">
         <button type="button" onclick="document.getElementById('rejectModal').style.display='none'" class="btn btn-ghost">取消</button>
         <button type="submit" class="btn btn-danger">确认拒绝</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 撤回原因弹窗 -->
+<div id="revokeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:12px;max-width:420px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <h3 style="margin-bottom:6px;">填写撤回原因</h3>
+    <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:16px;">不填写则默认使用「内容违规」，将通过邮件通知用户</p>
+    <form method="POST" id="revokeForm">
+      <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+      <input type="hidden" name="action" value="revoke">
+      <input type="hidden" name="bid" id="revokeBid">
+      <div class="form-group">
+        <textarea name="review_remark" id="revokeRemark" class="form-control" rows="3"
+                  placeholder="不填写则默认「内容违规」（用户可见）"></textarea>
+      </div>
+      <div class="d-flex gap-2 justify-end">
+        <button type="button" onclick="document.getElementById('revokeModal').style.display='none'" class="btn btn-ghost">取消</button>
+        <button type="submit" class="btn btn-danger">确认撤回</button>
       </div>
     </form>
   </div>
@@ -161,7 +262,7 @@ $paginationUrl = '/admin/bots.php?' . http_build_query(array_filter(['q'=>$keywo
             </form>
             <button type="button" class="btn btn-danger btn-sm" onclick="openReject(<?= $b['id'] ?>)">拒绝</button>
             <?php elseif ($b['review_status'] == 1): ?>
-            <button type="button" class="btn btn-warning btn-sm" onclick="openReject(<?= $b['id'] ?>)">撤回</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="openRevoke(<?= $b['id'] ?>)">撤回</button>
             <?php else: ?>
             <form method="POST" style="display:inline;">
               <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
@@ -190,9 +291,18 @@ $paginationUrl = '/admin/bots.php?' . http_build_query(array_filter(['q'=>$keywo
 <script>
 function openReject(bid) {
     document.getElementById('rejectBid').value = bid;
+    document.getElementById('rejectRemark').value = '';
     document.getElementById('rejectModal').style.display = 'flex';
 }
+function openRevoke(bid) {
+    document.getElementById('revokeBid').value = bid;
+    document.getElementById('revokeRemark').value = '';
+    document.getElementById('revokeModal').style.display = 'flex';
+}
 document.getElementById('rejectModal').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+document.getElementById('revokeModal').addEventListener('click', function(e) {
     if (e.target === this) this.style.display = 'none';
 });
 </script>

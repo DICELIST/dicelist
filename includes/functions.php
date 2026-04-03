@@ -15,24 +15,31 @@ function initSession(): void {
 
 function getCurrentUser(): ?array {
     initSession();
-    if (!empty($_SESSION['user_id'])) {
-        $pdo = getDB();
-        $stmt = $pdo->prepare(
-            'SELECT id, username, nickname, email, email_verified,
-                    is_admin, is_super, is_banned, ban_reason, created_at
-             FROM users WHERE id = ?'
-        );
-        $stmt->execute([$_SESSION['user_id']]);
-        $user = $stmt->fetch();
-        if (!$user) return null;
-        // 封禁账号强制退出
-        if ($user['is_banned']) {
-            session_destroy();
+    if (empty($_SESSION['user_id'])) {
+        // session 中无用户，尝试从 Remember Me cookie 恢复
+        if (!empty($_COOKIE['remember_token'])) {
+            $restored = tryRememberMeLogin();
+            if (!$restored) return null;
+        } else {
             return null;
         }
-        return $user;
     }
-    return null;
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT id, username, nickname, email, email_verified,
+                is_admin, is_super, is_banned, ban_reason, created_at
+         FROM users WHERE id = ?'
+    );
+    $stmt->execute([$_SESSION['user_id']]);
+    $user = $stmt->fetch();
+    if (!$user) return null;
+    // 封禁账号强制退出
+    if ($user['is_banned']) {
+        session_destroy();
+        clearRememberMeToken();
+        return null;
+    }
+    return $user;
 }
 
 function requireLogin(): void {
@@ -258,7 +265,77 @@ function getSuperDeviceFingerprint(): string {
     return hash('sha256', $ua . '|' . $ip);
 }
 
+
 // ====== 检查内容是否需要审核 ======
 function isReviewRequired(): bool {
     return getSiteSetting('review_required', '1') === '1';
 }
+
+// ====== 保持登录（Remember Me）======
+// 在 getCurrentUser() 里调用，如果 session 无效则尝试从 cookie 恢复
+function tryRememberMeLogin(): ?array {
+    $token = $_COOKIE['remember_token'] ?? '';
+    if ($token === '') return null;
+
+    $pdo  = getDB();
+    $hash = hash('sha256', $token);
+    $stmt = $pdo->prepare(
+        'SELECT rt.user_id, rt.expires_at, u.id, u.username, u.nickname,
+                u.is_admin, u.is_super, u.is_banned, u.ban_reason
+         FROM remember_tokens rt
+         LEFT JOIN users u ON rt.user_id = u.id
+         WHERE rt.token_hash = ? AND rt.expires_at > NOW()
+         LIMIT 1'
+    );
+    $stmt->execute([$hash]);
+    $row = $stmt->fetch();
+    if (!$row || !$row['id']) {
+        // 无效 token，清除 cookie
+        setcookie('remember_token', '', time()-3600, '/', '', false, true);
+        return null;
+    }
+    if ($row['is_banned']) {
+        setcookie('remember_token', '', time()-3600, '/', '', false, true);
+        return null;
+    }
+
+    // 恢复 session
+    initSession();
+    session_regenerate_id(true);
+    $_SESSION['user_id'] = $row['user_id'];
+
+    // Token 滚动（每次使用都换新 token，防止重放）
+    $newToken = bin2hex(random_bytes(32));
+    $newHash  = hash('sha256', $newToken);
+    $expires  = date('Y-m-d H:i:s', time() + 30 * 86400);
+    $pdo->prepare('UPDATE remember_tokens SET token_hash=?, expires_at=? WHERE token_hash=?')
+        ->execute([$newHash, $expires, $hash]);
+    setcookie('remember_token', $newToken, time() + 30 * 86400, '/', '', false, true);
+
+    return $row;
+}
+
+function setRememberMeToken(int $userId): void {
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $expires = date('Y-m-d H:i:s', time() + 30 * 86400);
+    $pdo = getDB();
+    // 同一用户最多保留 5 个设备的 token，清掉多余的
+    $pdo->prepare('DELETE FROM remember_tokens WHERE user_id=? AND id NOT IN (
+        SELECT id FROM (SELECT id FROM remember_tokens WHERE user_id=? ORDER BY created_at DESC LIMIT 4) t
+    )')->execute([$userId, $userId]);
+    $pdo->prepare('INSERT INTO remember_tokens (user_id, token_hash, expires_at) VALUES (?,?,?)')
+        ->execute([$userId, $hash, $expires]);
+    setcookie('remember_token', $token, time() + 30 * 86400, '/', '', false, true);
+}
+
+function clearRememberMeToken(): void {
+    $token = $_COOKIE['remember_token'] ?? '';
+    if ($token !== '') {
+        $hash = hash('sha256', $token);
+        $pdo  = getDB();
+        $pdo->prepare('DELETE FROM remember_tokens WHERE token_hash=?')->execute([$hash]);
+        setcookie('remember_token', '', time()-3600, '/', '', false, true);
+    }
+}
+

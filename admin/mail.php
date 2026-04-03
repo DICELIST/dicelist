@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_tpl'])) {
     $tplKey  = trim($_POST['tpl_key']  ?? '');
     $subject = trim($_POST['subject']  ?? '');
     $body    = $_POST['body']          ?? '';
-    $allowed = ['register','reset_pwd','rebind'];
+    $allowed = ['register','reset_pwd','rebind','bot_approved','bot_rejected','bot_revoked'];
     if (!in_array($tplKey, $allowed, true)) {
         $errors[] = '无效的模板类型';
     } elseif ($subject === '') {
@@ -171,15 +171,19 @@ $csrfToken = e(getCsrfToken());
   <div class="card">
     <div class="card-header">
       <h3>编辑模板：<?= [
-        'register'  => '注册验证码',
-        'reset_pwd' => '重置密码验证码',
-        'rebind'    => '换绑邮箱验证码'
+        'register'     => '注册验证码',
+        'reset_pwd'    => '重置密码验证码',
+        'rebind'       => '换绑邮箱验证码',
+        'bot_approved' => '审核通过通知',
+        'bot_rejected' => '审核拒绝通知',
+        'bot_revoked'  => '审核撤回通知',
       ][$editTpl['tpl_key']] ?? $editTpl['tpl_key'] ?></h3>
       <a href="?tab=templates" class="btn btn-ghost btn-sm">← 返回列表</a>
     </div>
     <div class="card-body">
       <div class="alert alert-info" style="margin-bottom:16px;font-size:0.85rem;">
-        支持占位符：<code>{code}</code>（验证码）、<code>{site_name}</code>（站名）、<code>{username}</code>（用户名/邮箱）
+        支持占位符：<code>{code}</code>（验证码）、<code>{site_name}</code>（站名）、<code>{username}</code>（用户名/邮箱）<br>
+        审核通知额外支持：<code>{bot_name}</code>（Bot昵称）、<code>{bot_url}</code>（详情页链接）、<code>{reject_reason}</code>（拒绝原因）、<code>{revoke_reason}</code>（撤回原因）、<code>{edit_url}</code>（编辑页链接）
       </div>
       <form method="POST" action="?tab=templates">
         <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
@@ -211,9 +215,12 @@ $csrfToken = e(getCsrfToken());
       <tbody>
         <?php
         $tplNames = [
-          'register'  => '📧 注册验证码',
-          'reset_pwd' => '🔑 重置密码验证码',
-          'rebind'    => '🔄 换绑邮箱验证码',
+          'register'     => '📧 注册验证码',
+          'reset_pwd'    => '🔑 重置密码验证码',
+          'rebind'       => '🔄 换绑邮箱验证码',
+          'bot_approved' => '✅ 审核通过通知',
+          'bot_rejected' => '❌ 审核拒绝通知',
+          'bot_revoked'  => '↩️ 审核撤回通知',
         ];
         foreach ($tplNames as $key => $name):
           $t = $tplMap[$key] ?? null;

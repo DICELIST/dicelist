@@ -1,6 +1,6 @@
 <?php
 /**
- * Bot 编辑页
+ * Bot 编辑页 - 支持被拒绝后"先修改再重新提交"流程
  */
 require_once __DIR__ . '/includes/functions.php';
 requireLogin();
@@ -26,9 +26,28 @@ if ($bot['user_id'] != $currentUser['id'] && !$currentUser['is_admin']) {
 
 $errors = [];
 $data = $bot; // 初始填入原始数据
+$saveSuccess = false; // 本次保存成功标志（用于显示重新提交按钮）
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
+    $postAction = $_POST['post_action'] ?? 'save';
+
+    // —— 重新提交审核 ——
+    if ($postAction === 'resubmit') {
+        // 只有被拒绝的 Bot 才能重新提交
+        if ($bot['review_status'] == 2 && ($bot['user_id'] == $currentUser['id'] || $currentUser['is_admin'])) {
+            $pdo->prepare('UPDATE bots SET review_status=0, review_remark="", reviewed_at=NULL, reviewed_by=NULL WHERE id=?')
+                ->execute([$id]);
+            setFlash('success', '已重新提交审核，等待管理员审核');
+            header('Location: /profile.php');
+            exit;
+        }
+        setFlash('error', '操作不合法');
+        header('Location: /edit.php?id=' . $id);
+        exit;
+    }
+
+    // —— 保存修改 ——
     $fields = ['platform','nickname','id_url','framework','owner','mode','blacklist','status','invite_condition','remarks','description'];
     foreach ($fields as $f) {
         $data[$f] = trim($_POST[$f] ?? '');
@@ -44,9 +63,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data['blacklist'], $data['status'], $data['invite_condition'],
             $data['remarks'], $data['description'], $id
         ]);
-        setFlash('success', 'Bot信息已更新');
-        header('Location: /detail.php?id=' . $id);
-        exit;
+
+        // 保存后：被拒绝的 Bot 留在编辑页，显示重新提交按钮；其他状态跳转详情页
+        if ($bot['review_status'] == 2) {
+            $saveSuccess = true;
+            // 刷新 bot 数据
+            $stmt2 = $pdo->prepare('SELECT * FROM bots WHERE id = ?');
+            $stmt2->execute([$id]);
+            $bot  = $stmt2->fetch();
+            $data = $bot;
+        } else {
+            setFlash('success', 'Bot信息已更新');
+            header('Location: /detail.php?id=' . $id);
+            exit;
+        }
     }
 }
 
@@ -55,6 +85,8 @@ $optFramework = getOptions('framework');
 $optMode      = getOptions('mode');
 $optBlacklist = getOptions('blacklist');
 $optStatus    = getOptions('status');
+
+$isRejected = ($bot['review_status'] == 2);
 
 $pageTitle = '编辑Bot - ' . e($bot['nickname']);
 require_once __DIR__ . '/includes/header.php';
@@ -67,12 +99,50 @@ require_once __DIR__ . '/includes/header.php';
   <div class="page-header">
     <div class="breadcrumb">
       <a href="/index.php">首页</a><span>/</span>
-      <a href="/detail.php?id=<?= $id ?>">Bot详情</a><span>/</span>
+      <?php if ($isRejected): ?>
+      <a href="/trash.php">回收站</a>
+      <?php else: ?>
+      <a href="/detail.php?id=<?= $id ?>">Bot详情</a>
+      <?php endif; ?>
+      <span>/</span>
       <span>编辑</span>
     </div>
     <h1>编辑 Bot</h1>
     <p>修改 <strong><?= e($bot['nickname']) ?></strong> 的信息</p>
   </div>
+
+  <?php if ($isRejected && !$saveSuccess): ?>
+  <!-- 被拒绝警告 banner -->
+  <div class="alert alert-error" style="display:flex;align-items:flex-start;gap:12px;margin-bottom:20px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <div>
+      <div style="font-weight:700;margin-bottom:4px;">此内容审核未通过</div>
+      <?php if ($bot['review_remark']): ?>
+      <div style="font-size:0.9rem;">拒绝原因：<?= e($bot['review_remark']) ?></div>
+      <?php endif; ?>
+      <div style="font-size:0.85rem;margin-top:6px;color:inherit;opacity:0.85;">请根据上述原因修改内容，保存后会出现"重新提交审核"按钮。</div>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <?php if ($saveSuccess): ?>
+  <!-- 保存成功 + 重新提交提示 -->
+  <div class="alert alert-success" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <span>修改已保存。现在可以重新提交审核，等待管理员审核通过后将重新公开显示。</span>
+    </div>
+    <form method="POST" action="/edit.php?id=<?= $id ?>">
+      <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+      <input type="hidden" name="post_action" value="resubmit">
+      <button type="submit" class="btn btn-primary"
+              style="background:#34c759;border-color:#34c759;white-space:nowrap;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        重新提交审核
+      </button>
+    </form>
+  </div>
+  <?php endif; ?>
 
   <?php foreach ($errors as $err): ?>
   <div class="alert alert-error"><?= e($err) ?></div>
@@ -80,6 +150,7 @@ require_once __DIR__ . '/includes/header.php';
 
   <form method="POST" action="/edit.php?id=<?= $id ?>">
     <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+    <input type="hidden" name="post_action" value="save">
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;" class="form-grid">
       <div class="card">
@@ -178,7 +249,11 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
     <div class="d-flex gap-2 mt-3 mb-4 justify-center">
+      <?php if ($isRejected): ?>
+      <a href="/trash.php" class="btn btn-ghost btn-lg">返回回收站</a>
+      <?php else: ?>
       <a href="/detail.php?id=<?= $id ?>" class="btn btn-ghost btn-lg">取消</a>
+      <?php endif; ?>
       <button type="submit" class="btn btn-primary btn-lg">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v14a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         保存修改

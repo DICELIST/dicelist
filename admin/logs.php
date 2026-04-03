@@ -70,11 +70,36 @@ $actionTypes = $pdo->query('SELECT DISTINCT action FROM admin_logs ORDER BY acti
 
 // ---- 操作类型中文映射 ----
 $actionLabels = [
+    // 新版英文 key（2026-04-03 起）
     'approve_bot'       => '通过Bot',
     'reject_bot'        => '拒绝Bot',
+    'revoke_bot'        => '撤回Bot',
     'delete_bot'        => '删除Bot',
+    // 旧版中文 key（兼容历史日志）
+    '审核通过Bot'       => '通过Bot',
+    '审核拒绝Bot'       => '拒绝Bot',
+    '撤回Bot审核'       => '撤回Bot',
+    '删除Bot'           => '删除Bot',
+    '封禁用户'          => '封禁用户',
+    '解禁用户'          => '解封用户',
+    '设为管理员'        => '设置管理员',
+    '撤销管理员'        => '撤销管理员',
+    '删除用户'          => '删除用户',
+    '编辑用户'          => '编辑用户',
+    '编辑公告'          => '编辑公告',
+    '发布公告'          => '新增公告',
+    '删除公告'          => '删除公告',
+    '切换公告'          => '切换公告',
+    '编辑友情链接'      => '编辑友情链接',
+    '添加友情链接'      => '新增友情链接',
+    '删除友情链接'      => '删除友情链接',
+    // 新版英文 key（其他页面）
     'ban_user'          => '封禁用户',
     'unban_user'        => '解封用户',
+    'set_admin'         => '设置管理员',
+    'remove_admin'      => '撤销管理员',
+    'delete_user'       => '删除用户',
+    'edit_user'         => '编辑用户',
     'set_admin'         => '设置管理员',
     'remove_admin'      => '撤销管理员',
     'delete_user'       => '删除用户',
@@ -168,11 +193,11 @@ $csrfToken = e(getCsrfToken());
             $actionLabel = $actionLabels[$actionKey] ?? $actionKey;
             // 颜色分类
             $badgeClass = 'badge-blue';
-            if (in_array($actionKey, ['ban_user','delete_bot','delete_user','del_announcement','del_link'])) {
+            if (in_array($actionKey, ['ban_user','delete_bot','delete_user','del_announcement','del_link','封禁用户','删除Bot','删除用户','删除公告','删除友情链接'])) {
                 $badgeClass = 'badge-red';
-            } elseif (in_array($actionKey, ['approve_bot','unban_user','set_admin'])) {
+            } elseif (in_array($actionKey, ['approve_bot','unban_user','set_admin','审核通过Bot','解禁用户','设为管理员'])) {
                 $badgeClass = 'badge-green';
-            } elseif (in_array($actionKey, ['reject_bot','remove_admin'])) {
+            } elseif (in_array($actionKey, ['reject_bot','revoke_bot','remove_admin','审核拒绝Bot','撤回Bot审核','撤销管理员'])) {
                 $badgeClass = 'badge-orange';
             }
             ?>

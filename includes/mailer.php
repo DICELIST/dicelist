@@ -28,11 +28,54 @@ function renderMailTemplate(string $tplKey, array $vars): array {
     $stmt->execute([$tplKey]);
     $tpl = $stmt->fetch();
     if (!$tpl) {
-        // 降级模板
-        return [
-            'subject' => '[' . ($vars['site_name'] ?? '') . '] 验证码',
-            'body'    => '你的验证码是：' . ($vars['code'] ?? '') . '，10分钟内有效。'
+        // 降级模板：根据 tpl_key 返回合适的默认内容
+        $fallbacks = [
+            'bot_approved' => [
+                'subject' => '[{site_name}] 你的Bot「{bot_name}」已通过审核',
+                'body'    => '<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:12px;">
+  <h2 style="color:#34c759;">✅ 审核已通过</h2>
+  <p>你好，<strong>{username}</strong>！</p>
+  <p>你的 Bot「<strong>{bot_name}</strong>」已通过审核，现在对外公开展示。</p>
+  <p><a href="{bot_url}" style="display:inline-block;padding:10px 24px;background:#0a84ff;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">查看详情</a></p>
+  <hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0;">
+  <p style="font-size:12px;color:#999;">此邮件由 {site_name} 系统自动发送，请勿回复。</p>
+</div>',
+            ],
+            'bot_rejected' => [
+                'subject' => '[{site_name}] 你的Bot「{bot_name}」审核未通过',
+                'body'    => '<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:12px;">
+  <h2 style="color:#ff3b30;">❌ 审核未通过</h2>
+  <p>你好，<strong>{username}</strong>！</p>
+  <p>你的 Bot「<strong>{bot_name}</strong>」审核未通过。</p>
+  <p><strong>拒绝原因：</strong>{reject_reason}</p>
+  <p>请根据原因修改后重新提交。</p>
+  <p><a href="{edit_url}" style="display:inline-block;padding:10px 24px;background:#0a84ff;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">修改并重新提交</a></p>
+  <hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0;">
+  <p style="font-size:12px;color:#999;">此邮件由 {site_name} 系统自动发送，请勿回复。</p>
+</div>',
+            ],
+            'bot_revoked' => [
+                'subject' => '[{site_name}] 你的Bot「{bot_name}」已被撤回',
+                'body'    => '<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:12px;">
+  <h2 style="color:#ff9500;">↩️ 审核已撤回</h2>
+  <p>你好，<strong>{username}</strong>！</p>
+  <p>你的 Bot「<strong>{bot_name}</strong>」已被管理员从已通过列表中撤回，暂时不再公开展示。</p>
+  <p><strong>撤回原因：</strong>{revoke_reason}</p>
+  <p>请根据原因修改后重新提交审核。</p>
+  <p><a href="{edit_url}" style="display:inline-block;padding:10px 24px;background:#0a84ff;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">修改并重新提交</a></p>
+  <hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0;">
+  <p style="font-size:12px;color:#999;">此邮件由 {site_name} 系统自动发送，请勿回复。</p>
+</div>',
+            ],
         ];
+        if (isset($fallbacks[$tplKey])) {
+            $tpl = $fallbacks[$tplKey];
+        } else {
+            return [
+                'subject' => '[' . ($vars['site_name'] ?? '') . '] 验证码',
+                'body'    => '你的验证码是：' . ($vars['code'] ?? '') . '，10分钟内有效。'
+            ];
+        }
     }
     $search  = array_map(fn($k) => '{' . $k . '}', array_keys($vars));
     $replace = array_values($vars);

@@ -66,8 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($errors)) {
             $hash = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare('INSERT INTO users (username, password, nickname, email, email_verified) VALUES (?, ?, ?, ?, 1)');
-            $stmt->execute([$username, $hash, $nickname, $email]);
+            $stmt = $pdo->prepare('INSERT INTO users (username, password, nickname, nickname_lower, email, email_verified) VALUES (?, ?, ?, ?, ?, 1)');
+            $stmt->execute([$username, $hash, $nickname, mb_strtolower($nickname, 'UTF-8'), $email]);
             $userId = $pdo->lastInsertId();
 
             initSession();
@@ -129,10 +129,25 @@ $csrfToken = e(getCsrfToken());
         <div class="email-code-row">
           <input type="email" id="email" name="email" class="form-control"
                  placeholder="用于验证和找回密码" value="<?= e($email) ?>" required maxlength="255" autocomplete="email">
-          <button type="button" class="btn btn-outline btn-sm" id="sendCodeBtn" onclick="sendCode()">
+          <button type="button" class="btn btn-outline btn-sm" id="sendCodeBtn" onclick="checkCaptchaThenSend()">
             获取验证码
           </button>
         </div>
+      </div>
+
+      <!-- 图形验证码行（点击获取验证码时显示） -->
+      <div class="form-group" id="captchaRow" style="display:none;">
+        <label class="form-label">图形验证码</label>
+        <div class="captcha-row">
+          <input type="text" id="captchaInput" class="form-control captcha-input"
+                 placeholder="输入图中字符" maxlength="4" autocomplete="off" style="text-transform:uppercase;">
+          <img src="/captcha.php" id="captchaImg" class="captcha-img" onclick="refreshCaptcha()" title="点击刷新">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="refreshCaptcha()">刷新</button>
+        </div>
+        <div id="captchaHint" class="unique-hint" style="margin-top:4px;"></div>
+        <button type="button" class="btn btn-primary btn-sm mt-1" id="captchaConfirmBtn" onclick="verifyCaptchaThenSendCode()">
+          确认并发送验证码
+        </button>
       </div>
       <div class="form-group">
         <label class="form-label" for="verify_code">邮箱验证码 <span class="required">*</span></label>
@@ -189,6 +204,10 @@ $csrfToken = e(getCsrfToken());
 .agreement-check-label { display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:0.88rem;line-height:1.5; }
 .agreement-check-label input[type=checkbox] { margin-top:3px;flex-shrink:0;width:16px;height:16px;accent-color:var(--blue-primary); }
 .agreement-link { color:var(--blue-primary);text-decoration:underline; }
+/* 图形验证码 */
+.captcha-row { display:flex;gap:8px;align-items:center;flex-wrap:wrap; }
+.captcha-input { flex:1;min-width:0;max-width:120px;letter-spacing:4px;font-size:1.1rem;font-weight:600; }
+.captcha-img { height:40px;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;display:block; }
 /* 协议弹窗 */
 .agreement-modal-overlay {
     display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2000;
@@ -389,7 +408,15 @@ document.addEventListener('DOMContentLoaded', function() {
 var sendCodeCooldown = 0;
 var sendCodeTimer = null;
 
-function sendCode() {
+/* 图形验证码 */
+function refreshCaptcha() {
+    document.getElementById('captchaImg').src = '/captcha.php?t=' + Date.now();
+    document.getElementById('captchaInput').value = '';
+    document.getElementById('captchaHint').textContent = '';
+    document.getElementById('captchaHint').className = 'unique-hint';
+}
+
+function checkCaptchaThenSend() {
     if (sendCodeCooldown > 0) return;
     var email = document.getElementById('email').value.trim();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -397,6 +424,49 @@ function sendCode() {
         document.getElementById('email').focus();
         return;
     }
+    // 显示图形验证码区域
+    document.getElementById('captchaRow').style.display = 'block';
+    refreshCaptcha();
+    document.getElementById('captchaInput').focus();
+}
+
+function verifyCaptchaThenSendCode() {
+    var captchaVal = document.getElementById('captchaInput').value.trim();
+    if (!captchaVal) {
+        document.getElementById('captchaHint').textContent = '请输入图中字符';
+        document.getElementById('captchaHint').className = 'unique-hint error';
+        return;
+    }
+    var confirmBtn = document.getElementById('captchaConfirmBtn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '验证中...';
+
+    fetch('/captcha.php?verify=1&code=' + encodeURIComponent(captchaVal))
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                document.getElementById('captchaHint').textContent = '✓ ' + data.msg;
+                document.getElementById('captchaHint').className = 'unique-hint ok';
+                // 隐藏图形验证码区域，执行发送
+                document.getElementById('captchaRow').style.display = 'none';
+                sendCode();
+            } else {
+                document.getElementById('captchaHint').textContent = data.msg;
+                document.getElementById('captchaHint').className = 'unique-hint error';
+                refreshCaptcha();
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = '确认并发送验证码';
+            }
+        })
+        .catch(() => {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '确认并发送验证码';
+        });
+}
+
+function sendCode() {
+    if (sendCodeCooldown > 0) return;
+    var email = document.getElementById('email').value.trim();
     var btn = document.getElementById('sendCodeBtn');
     btn.disabled = true;
     btn.textContent = '发送中...';

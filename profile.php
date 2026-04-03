@@ -97,8 +97,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// 获取该用户发布的Bot列表
-$stmt = $pdo->prepare('SELECT id, nickname, status, platform, view_count, created_at FROM bots WHERE user_id = ? ORDER BY created_at DESC');
+// 获取该用户发布的Bot列表（排除被拒绝的，被拒绝的在回收站查看）
+$stmt = $pdo->prepare('SELECT id, nickname, status, platform, view_count, created_at, review_status FROM bots WHERE user_id = ? AND review_status != 2 ORDER BY created_at DESC');
 $stmt->execute([$currentUser['id']]);
 $myBots = $stmt->fetchAll();
 
@@ -365,7 +365,13 @@ $csrfToken = e(getCsrfToken());
             <tr>
               <td><a href="/detail.php?id=<?= $bot['id'] ?>" style="color:var(--blue-primary);text-decoration:none;font-weight:500;"><?= e($bot['nickname']) ?></a></td>
               <td><?= $bot['platform'] ? '<span class="badge badge-blue">'.e($bot['platform']).'</span>' : '-' ?></td>
-              <td><?= $bot['status'] ? '<span class="badge status-'.e($bot['status']).'">'.e($bot['status']).'</span>' : '-' ?></td>
+              <td>
+                <?php if ($bot['review_status'] == 0): ?>
+                  <span class="badge badge-warning" style="font-size:0.75rem;">审核中</span>
+                <?php else: ?>
+                  <?= $bot['status'] ? '<span class="badge status-'.e($bot['status']).'">'.e($bot['status']).'</span>' : '-' ?>
+                <?php endif; ?>
+              </td>
               <td><?= $bot['view_count'] ?></td>
               <td><?= formatTime($bot['created_at']) ?></td>
               <td>
@@ -540,9 +546,62 @@ function closeRebindModal() {
     document.body.style.overflow = '';
 }
 
+/* ===== 图形验证码通用逻辑 ===== */
+var _captchaContext = null; // 'pwd' | 'rebind'
+
+function refreshCaptcha() {
+    document.getElementById('profileCaptchaImg').src = '/captcha.php?t=' + Date.now();
+    document.getElementById('profileCaptchaInput').value = '';
+    document.getElementById('profileCaptchaHint').textContent = '';
+}
+
+function openCaptchaModal(ctx) {
+    _captchaContext = ctx;
+    document.getElementById('profileCaptchaHint').textContent = '';
+    document.getElementById('profileCaptchaConfirmBtn').disabled = false;
+    document.getElementById('profileCaptchaConfirmBtn').textContent = '确认并发送验证码';
+    document.getElementById('profileCaptchaModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    refreshCaptcha();
+    setTimeout(function(){ document.getElementById('profileCaptchaInput').focus(); }, 100);
+}
+
+function closeCaptchaModal() {
+    document.getElementById('profileCaptchaModal').classList.remove('open');
+    // 不改 body overflow，因为背后可能有别的弹窗打开着
+}
+
+function confirmCaptcha() {
+    var val = document.getElementById('profileCaptchaInput').value.trim();
+    if (!val) {
+        document.getElementById('profileCaptchaHint').textContent = '请输入图中字符';
+        return;
+    }
+    var btn = document.getElementById('profileCaptchaConfirmBtn');
+    btn.disabled = true; btn.textContent = '验证中...';
+
+    fetch('/captcha.php?verify=1&code=' + encodeURIComponent(val))
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                closeCaptchaModal();
+                if (_captchaContext === 'pwd') _doSendPwdCode();
+                else if (_captchaContext === 'rebind') _doSendRebindCode();
+            } else {
+                document.getElementById('profileCaptchaHint').textContent = data.msg;
+                refreshCaptcha();
+                btn.disabled = false; btn.textContent = '确认并发送验证码';
+            }
+        })
+        .catch(() => { btn.disabled = false; btn.textContent = '确认并发送验证码'; });
+}
+
 /* 验证码 */
 function sendPwdCode() {
     if (pwdCooldown > 0) return;
+    openCaptchaModal('pwd');
+}
+function _doSendPwdCode() {
     var btn = document.getElementById('pwdCodeBtn');
     btn.disabled = true; btn.textContent = '发送中...';
     var fd = new FormData();
@@ -562,6 +621,10 @@ function sendRebindCode() {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         alert('请先填写新邮箱地址'); return;
     }
+    openCaptchaModal('rebind');
+}
+function _doSendRebindCode() {
+    var email = document.getElementById('newEmailInput').value.trim();
     var btn = document.getElementById('rebindCodeBtn');
     btn.disabled = true; btn.textContent = '发送中...';
     var fd = new FormData();
@@ -588,5 +651,35 @@ function startCD(type, btn, s) {
     }, 1000);
 }
 </script>
+
+<!-- ===== 图形验证码弹窗（共用） ===== -->
+<div id="profileCaptchaModal" class="profile-modal-overlay" onclick="if(event.target===this)closeCaptchaModal()">
+  <div class="profile-modal" style="max-width:360px;">
+    <div class="profile-modal-head">
+      <h3>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        图形验证码
+      </h3>
+      <button type="button" onclick="closeCaptchaModal()" class="modal-close-btn">&times;</button>
+    </div>
+    <div class="profile-modal-body">
+      <p style="font-size:0.85rem;color:var(--text-sub);margin-bottom:14px;">请完成图形验证后发送邮箱验证码</p>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+        <input type="text" id="profileCaptchaInput" class="form-control"
+               placeholder="输入图中字符" maxlength="4" autocomplete="off"
+               style="flex:1;letter-spacing:4px;font-size:1.1rem;font-weight:600;text-transform:uppercase;"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();confirmCaptcha();}">
+        <img src="/captcha.php" id="profileCaptchaImg"
+             style="height:40px;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;"
+             onclick="refreshCaptcha()" title="点击刷新">
+      </div>
+      <div id="profileCaptchaHint" style="font-size:0.8rem;color:#ff3b30;min-height:1.2em;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="refreshCaptcha()">刷新</button>
+        <button type="button" class="btn btn-primary" id="profileCaptchaConfirmBtn" onclick="confirmCaptcha()" style="flex:1;">确认并发送验证码</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

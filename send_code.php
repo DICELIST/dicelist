@@ -16,6 +16,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // CSRF
 verifyCsrf();
 
+// 图形验证码校验（必须先通过图形验证码才能发邮件验证码）
+initSession();
+if (empty($_SESSION['captcha_passed'])) {
+    echo json_encode(['ok' => false, 'msg' => '请先完成图形验证码验证']);
+    exit;
+}
+// 消费掉通过标记（一次性）
+unset($_SESSION['captcha_passed']);
+
 $email   = trim($_POST['email']   ?? '');
 $purpose = trim($_POST['purpose'] ?? '');
 $allowed = ['register', 'reset_pwd', 'rebind'];
